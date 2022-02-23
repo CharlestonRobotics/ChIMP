@@ -1,5 +1,5 @@
 /*
- * General configuration for HoverBot.ino
+ * General configuration for ChIMP.ino
  * Tested on an Arduino Mega
  */
 
