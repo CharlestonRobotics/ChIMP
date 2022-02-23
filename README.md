@@ -1,3 +1,5 @@
+# This project is based on HoverBot. Original readme below.
+
 # HoverBot
 Rugged radio-controlled self-balancing robot using hoverboard hub motors.
 
