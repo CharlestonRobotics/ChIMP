@@ -3,9 +3,9 @@ Once you installed all tools following these instructions https://docs.odriverob
 
 All you need to do is 
 1. Wire up the ODrive and the motors
-2. Power up the ODrive
-3. Make sure both motors are ABSOLUTELY FREE TO TURN (put the robot on a stand)
-4. Connect the ODrive to your computer via USB
+2. Make sure both motors are ABSOLUTELY FREE TO TURN (put the robot on a stand)
+3. Connect the ODrive to your computer via USB
+4. Power up the ODrive
 5. Run the script using a python3 interpreter. On Linux this will look like so for motor 0
 ```console
 ./odrive_setup.py -a 0
