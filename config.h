@@ -9,16 +9,19 @@
 #define PWM_CHANNEL_3 18
 #define LEDPIN 13
 
-#define MOTORDIR_0 -1
-#define MOTORDIR_1 1
+#define MOTORDIR_0 1
+#define MOTORDIR_1 -1
 
 // CONTROLLER
-#define KP_BALANCE 0.4
+#define KP_BALANCE 0.5
 #define KD_BALANCE -0.065
 #define KP_POSITION 0.015
+#define KD_POSITION 0.01
 #define KP_STEERING 0.01
 #define KD_ORIENTATION 0.01
 #define TILT_LIMIT 40
+
+#define USE_VELOCITY false
 
 // RADIO CONTROL
 #define ENGAGE_THRESHOLD 1500
