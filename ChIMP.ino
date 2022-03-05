@@ -12,19 +12,19 @@ constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned long kSerialBaudratePc = 115200;
 constexpr unsigned long kSerialBaudrateOdrive = 115200;
-constexpr int motor_dir_0 = 1;
-constexpr int motor_dir_1 = -1;
+constexpr int kMotorDir0 = 1;
+constexpr int kMotorDir1 = -1;
 
 // RC settings.
 constexpr int kPwmCenterValue = 1500;
 constexpr int kEngageThresholdPwm = 1500;
 
 // Controller settings.
-constexpr float kp_balance = 0.5;
-constexpr float kd_balance = -0.065;
-constexpr float kp_drive = 0.015;
-constexpr float kp_steer = 0.01;
-constexpr float kd_steer = 0.01;
+constexpr float kKpBalance = 0.5;
+constexpr float kKdBalance = -0.065;
+constexpr float kKpDrive = 0.015;
+constexpr float kKpSteer = 0.01;
+constexpr float kKdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr bool kUseWheelVelocities = false;
 
@@ -74,7 +74,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), DecodeEngagePwmInput, CHANGE);
 
   // Check paramters for validity.
-  if (!((motor_dir_0 == 1 || motor_dir_0 == -1) && (motor_dir_1 == 1 || motor_dir_1 == -1))) {
+  if (!((kMotorDir0 == 1 || kMotorDir0 == -1) && (kMotorDir1 == 1 || kMotorDir1 == -1))) {
     Serial.println("Invalid motor direction paramters found. Halting for safety.");
     while (true);
   }
@@ -109,7 +109,7 @@ void MotionController() {
   }
 
   // Balance controller.
-  float balance_controller = euler_angles.z() * kp_balance + gyro_rates.x() * kd_balance;
+  float balance_controller = euler_angles.z() * kKpBalance + gyro_rates.x() * kKdBalance;
 
   // Planar motion controllers.
   float planar_velocity = 0;
@@ -120,14 +120,14 @@ void MotionController() {
     planar_velocity = (wheel_velocity_right + wheel_velocity_left) / 2.0;
   }
   //TODO(LuSeKa): Scale the position controller output based on the planar velocity (if feasible).
-  float position_controller = kp_drive * (throttle_pwm - kPwmCenterValue);
-  float steering_controller = kp_steer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kd_steer;
+  float position_controller = kKpDrive * (throttle_pwm - kPwmCenterValue);
+  float steering_controller = kKpSteer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kKdSteer;
 
   float current_command_right = (balance_controller - position_controller - steering_controller);
   float current_command_left = (balance_controller - position_controller + steering_controller);
 
-  odrive.SetCurrent(0, motor_dir_0 * current_command_right);
-  odrive.SetCurrent(1, motor_dir_1 * current_command_left);
+  odrive.SetCurrent(0, kMotorDir0 * current_command_right);
+  odrive.SetCurrent(1, kMotorDir1 * current_command_left);
 }
 
 // Engage or disengage motors.
