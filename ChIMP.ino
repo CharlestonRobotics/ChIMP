@@ -35,9 +35,9 @@ constexpr unsigned int kActivationIntervalMs = 50;
 
 // State flags.
 bool motors_active = false; // motor state
-bool tilt_limit_exceeded = false; // motor desired state
+bool tilt_limit_exceeded = false;
 
-// PWM decoder variables
+// PWM decoder variables.
 unsigned long last_throttle_pwm_rise_time = 0;
 unsigned long last_steering_pwm_rise_time = 0;
 unsigned long last_engage_pwm_rise_time = 0;
@@ -45,8 +45,8 @@ int throttle_pwm = 0;
 int steering_pwm = 0;
 int engage_pwm = 0;
 
-Adafruit_BNO055 bno = Adafruit_BNO055(); // Instantiate IMU.
-ODriveArduino odrive(Serial2); // Instantiate the ODrive.
+Adafruit_BNO055 bno = Adafruit_BNO055();
+ODriveArduino odrive(Serial2);
 
 // Instantiate Metros for task scheduling.
 Metro led_metro = Metro(kBlinkIntervalMs);
@@ -65,7 +65,7 @@ void setup() {
   }
   delay(1000);
 
-  // pwm decoder interrupts
+  // PWM decoder interrupt handling.
   last_throttle_pwm_rise_time = micros();
   last_steering_pwm_rise_time = micros();
   last_engage_pwm_rise_time = micros();
@@ -152,7 +152,7 @@ void EngageMotors(bool request_motors_active) {
 // RC PWM decder interrupt callbacks.
 void DecodeSteeringPwmInput() {
   if (digitalRead(kSteeringPwmInputPin)) { // Signal went HIGH.
-    last_steering_pwm_rise_time = micros(); // save the rise time
+    last_steering_pwm_rise_time = micros();
   }
   else { // Signal went LOW.
     steering_pwm = micros() - last_steering_pwm_rise_time;
@@ -161,7 +161,7 @@ void DecodeSteeringPwmInput() {
 
 void DecodeThrottlePwmInput() {
   if (digitalRead(kThrottlePwmInputPin)) { // Signal went HIGH.
-    last_throttle_pwm_rise_time = micros(); // save the rise time
+    last_throttle_pwm_rise_time = micros();
   }
   else { // Signal went LOW.
     throttle_pwm = micros() - last_throttle_pwm_rise_time;
@@ -170,7 +170,7 @@ void DecodeThrottlePwmInput() {
 
 void DecodeEngagePwmInput() {
   if (digitalRead(kEngagePwmInputPin)) { // Signal went HIGH.
-    last_engage_pwm_rise_time = micros(); // save the rise time
+    last_engage_pwm_rise_time = micros();
   }
   else { // Signal went LOW.
     engage_pwm = micros() - last_engage_pwm_rise_time;
