@@ -1,3 +1,5 @@
+![Title_picture](https://github.com/CharlestonRobotics/ChIMP/blob/master/media/rendering_00.png)
+
 # This project is based on HoverBot. Original readme below.
 
 # HoverBot
