@@ -11,7 +11,7 @@ def configure_motor(odrv, ax_num):
     axes = [odrv.axis0, odrv.axis1]
     ax = axes[ax_num]
     ax.motor.config.pole_pairs = 15
-    ax.motor.config.resistance_calib_max_voltage = 4
+    ax.motor.config.resistance_calib_max_voltage = 6
     ax.motor.config.requested_current_range = 25
     ax.motor.config.current_control_bandwidth = 100
     ax.motor.config.torque_constant = 1
@@ -27,6 +27,10 @@ def configure_encoder(odrv, ax_num):
 def configure_controllers(odrv, ax_num):
     axes = [odrv.axis0, odrv.axis1]
     ax = axes[ax_num]
+    ax.controller.config.pos_gain = 1
+    torque_constant_estimate = 8
+    ax.controller.config.vel_gain = 0.02 * torque_constant_estimate * ax.encoder.config.cpr
+    ax.controller.config.vel_integrator_gain = 0.1 * torque_constant_estimate * ax.encoder.config.cpr
     ax.controller.config.vel_limit = 10
     ax.controller.config.control_mode = 1 # CONTROL_MODE_TORQUE_CONTROL
     
@@ -38,6 +42,7 @@ def calibrate_motor(odrv, ax_num):
     time.sleep(1) # Wait for calibration to start.
     while ax.motor.is_armed:
         pass
+    time.sleep(1)
     ax.motor.config.pre_calibrated = True
     
 def calibrate_encoder(odrv, ax_num):
@@ -48,11 +53,13 @@ def calibrate_encoder(odrv, ax_num):
     time.sleep(1) # Wait for calibration to start.
     while ax.motor.is_armed:
         pass
+    time.sleep(1)
     print("Calibrating encoder offset...")
     ax.requested_state = 7 # AXIS_STATE_ENCODER_OFFSET_CALIBRATION
     time.sleep(1) # Wait for calibration to start.
     while ax.motor.is_armed:
         pass
+    time.sleep(1)
     ax.encoder.config.pre_calibrated = True
 
 def main():
@@ -63,14 +70,15 @@ def main():
         "-a",
         metavar = "axis",
         type = int,
-        default=0,
+        required = True,
         choices = [0, 1],
         help = "Axis to be configured. Can be 0 or 1.",
     )
     args = parser.parse_args()
     ax_num = args.a
-    print(f"Configuring axis{ax_num}.")
+    print(f"### Configuring axis{ax_num} ###\n")
     
+    print("Connecting to ODrive...")
     odrv0 = odrive.find_any()
     
     # Set DC voltage limits.
@@ -96,9 +104,14 @@ def main():
     configure_controllers(odrv0, ax_num)
     
     # Save configuration.
-    print("Saving configuration.")
     try:
         odrv0.save_configuration()
+    except:
+        print("Saving...")
+    # Re-discover ODrive.
+    odrv0 = odrive.find_any()
+    try:
+        odrv0.reboot()
     except:
         print("Rebooting...")
     # Re-discover ODrive.
@@ -106,14 +119,28 @@ def main():
     calibrate_motor(odrv0, ax_num)
     calibrate_encoder(odrv0, ax_num)
     
-    # Save configuration.
-    print("Saving configuration.")
+    
+    
+   # Save configuration.
     try:
         odrv0.save_configuration()
     except:
+        print("Saving...")
+    # Re-discover ODrive.
+    odrv0 = odrive.find_any()
+    try:
+        odrv0.reboot()
+    except:
         print("Rebooting...")
+    # Re-discover ODrive.
+    odrv0 = odrive.find_any()
+    system_error = odrv0.error
+    if not system_error:
+        print(f"Succesfully calibrated axis{ax_num}!")
+    else:
+        print(f"An error has occured: odrv0.error = {system_error}.")
         
-    print(f"Done calibrating axis{ax_num}!")
+    
     
 if __name__ == "__main__":
     main()
