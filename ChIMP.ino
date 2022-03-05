@@ -1,4 +1,3 @@
-#include "config.h"
 #include <Wire.h>
 #include <Metro.h>
 #include <Adafruit_Sensor.h>
@@ -6,120 +5,174 @@
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
 
-int motorsActive = 0; // motor state
+// Hardware settings.
+constexpr unsigned short kLedPin = 13;
+constexpr unsigned short kThrottlePwmInputPin = 3;
+constexpr unsigned short kSteeringPwmInputPin = 2;
+constexpr unsigned short kEngagePwmInputPin = 18;
+constexpr unsigned long kSerialBaudratePc = 115200;
+constexpr unsigned long kSerialBaudrateOdrive = 115200;
+constexpr int motor_dir_0 = 1;
+constexpr int motor_dir_1 = -1;
+
+// RC settings.
+constexpr int kPwmCenterValue = 1500;
+constexpr int kEngageThresholdPwm = 1500;
+
+// Controller settings.
+constexpr float kp_balance = 0.5;
+constexpr float kd_balance = -0.065;
+constexpr float kp_drive = 0.015;
+constexpr float kp_steer = 0.01;
+constexpr float kd_steer = 0.01;
+constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
+constexpr bool kUseWheelVelocities = false;
+
+// Task scheduling settings.
+constexpr unsigned int kBlinkIntervalMs = 200;
+constexpr unsigned int kControllerIntervalMs = 10;
+constexpr unsigned int kActivationIntervalMs = 50;
+
+// State flags.
+bool motors_active = false; // motor state
 bool tilt_limit_exceeded = false; // motor desired state
 
-Adafruit_BNO055 bno = Adafruit_BNO055(); // instantiate IMU
-ODriveArduino odrive(Serial2); // instantiate ODrive
-
-Metro ledMetro = Metro(BLINK_INTERVAL);
-Metro controllerMetro = Metro(CONTROLLER_INTERVAL);
-Metro activationMetro = Metro(ACTIVATION_INTERVAL);
-
 // PWM decoder variables
-int pwmDutyCycle_throttle = 0;
-int pwmDutyCycle_steering = 0;
-int pwmDutyCycle_mode = 0;
+unsigned long last_throttle_pwm_rise_time = 0;
+unsigned long last_steering_pwm_rise_time = 0;
+unsigned long last_engage_pwm_rise_time = 0;
+int throttle_pwm = 0;
+int steering_pwm = 0;
+int engage_pwm = 0;
+
+Adafruit_BNO055 bno = Adafruit_BNO055(); // Instantiate IMU.
+ODriveArduino odrive(Serial2); // Instantiate the ODrive.
+
+// Instantiate Metros for task scheduling.
+Metro led_metro = Metro(kBlinkIntervalMs);
+Metro controller_metro = Metro(kControllerIntervalMs);
+Metro activation_metro = Metro(kActivationIntervalMs);
 
 void setup() {
-  pinMode(LEDPIN, OUTPUT);
-  Serial2.begin(BAUDRATE_ODRIVE); // ODrive uses 115200 baud
-
-  Serial.begin(BAUDRATE_PC); // Serial to PC
-
-  // IMU
-  if (!bno.begin())
-  {
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while (1); // halt for safety
+  pinMode(kLedPin, OUTPUT);
+  Serial.begin(kSerialBaudratePc); // Serial connection to PC.
+  Serial2.begin(kSerialBaudrateOdrive); // Serial connection to ODrive.
+  bno.setExtCrystalUse(true);
+  if (!bno.begin()) {
+    // BNO initialization failed. Possible reasons are 1) bad wiring or 2) incorrect I2C address.
+    Serial.println("No BNO055 detected. Halting for safety.");
+    while (true);
   }
   delay(1000);
-  bno.setExtCrystalUse(true);
 
   // pwm decoder interrupts
-  attachInterrupt(digitalPinToInterrupt(PWM_CHANNEL_1), decodePwm_1, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PWM_CHANNEL_2), decodePwm_2, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PWM_CHANNEL_3), decodePwm_3, CHANGE);
+  last_throttle_pwm_rise_time = micros();
+  last_steering_pwm_rise_time = micros();
+  last_engage_pwm_rise_time = micros();
+  attachInterrupt(digitalPinToInterrupt(kSteeringPwmInputPin), DecodeSteeringPwmInput, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kThrottlePwmInputPin), DecodeThrottlePwmInput, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), DecodeEngagePwmInput, CHANGE);
+
+  // Check paramters for validity.
+  if (!((motor_dir_0 == 1 || motor_dir_0 == -1) && (motor_dir_1 == 1 || motor_dir_1 == -1))) {
+    Serial.println("Invalid motor direction paramters found. Halting for safety.");
+    while (true);
+  }
+  Serial.println("Starting ChIMP!");
 }
 
 void loop() {
-  controlTask();
-  activationTask();
-  blinkTask();
-}
-
-void controlTask() {
-  if (controllerMetro.check()) {
-    motionController();
+  if (controller_metro.check()) {
+    MotionController();
+  }
+  if (activation_metro.check()) {
+    bool request_motor_activation = engage_pwm > kEngageThresholdPwm && !tilt_limit_exceeded;
+    EngageMotors(request_motor_activation);
+  }
+  if (led_metro.check()) {
+    digitalWrite(kLedPin, !digitalRead(kLedPin));
   }
 }
 
-void activationTask() {
-  if (activationMetro.check()) {
-    modeSwitch(pwmDutyCycle_mode > ENGAGE_THRESHOLD && !tilt_limit_exceeded);
-  }
-}
+// Sample the IMU, compute current commands and send to the ODrive.
+void MotionController() {
+  // Sample the IMU.
+  imu::Vector<3> euler_angles = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Vector<3> gyro_rates = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 
-void blinkTask() {
-  if (ledMetro.check()) {
-    digitalWrite(LEDPIN, !digitalRead(LEDPIN));
-  }
-}
-void motionController() {
-  // IMU sampling
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
-
-  float planarVelocity = 0;
-  if (USE_VELOCITY) {
-    // Get wheel velocities
-    // This generates a lot of blocking serial traffic and might slow down the control loop.
-    float wheelVelocity_right = odrive.GetVelocity(0);
-    float wheelVelocity_left = odrive.GetVelocity(1);
-    planarVelocity = (wheelVelocity_right + wheelVelocity_left) / 2;
-  }
-
-  if (abs(euler.z()) > TILT_LIMIT) {
+  // Update the tilt safety flag based on the latest IMU reading.
+  if (abs(euler_angles.z()) > kTiltDisengageThresholdDegrees) {
     tilt_limit_exceeded = true;
   }
   else {
     tilt_limit_exceeded = false;
   }
 
-  // balance controller
-  float balanceControllerOutput = euler.z() * KP_BALANCE + gyro.x() * KD_BALANCE;
+  // Balance controller.
+  float balance_controller = euler_angles.z() * kp_balance + gyro_rates.x() * kd_balance;
 
-  // planar controllers (lateral position and steering angle)
-  float positionControllerOutput = KP_POSITION * (pwmDutyCycle_throttle - PWM_CENTER) - KD_POSITION * planarVelocity;
-  float steeringControllerOutput = KP_STEERING * (pwmDutyCycle_steering - PWM_CENTER) + gyro.z() * KD_ORIENTATION;
+  // Planar motion controllers.
+  float planar_velocity = 0;
+  if (kUseWheelVelocities) {
+    // Get wheel velocities. This generates a lot of blocking serial traffic and might slow down the control loop.
+    float wheel_velocity_right = odrive.GetVelocity(0);
+    float wheel_velocity_left = odrive.GetVelocity(1);
+    planar_velocity = (wheel_velocity_right + wheel_velocity_left) / 2.0;
+  }
+  //TODO(LuSeKa): Scale the position controller output based on the planar velocity (if feasible).
+  float position_controller = kp_drive * (throttle_pwm - kPwmCenterValue);
+  float steering_controller = kp_steer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kd_steer;
 
-  float controllerOutput_right = balanceControllerOutput - positionControllerOutput - steeringControllerOutput;
-  float controllerOutput_left  = balanceControllerOutput - positionControllerOutput + steeringControllerOutput;
+  float current_command_right = (balance_controller - position_controller - steering_controller);
+  float current_command_left = (balance_controller - position_controller + steering_controller);
 
-  odrive.SetCurrent(0, MOTORDIR_0 * controllerOutput_right);
-  odrive.SetCurrent(1, MOTORDIR_1 * controllerOutput_left);
+  odrive.SetCurrent(0, motor_dir_0 * current_command_right);
+  odrive.SetCurrent(1, motor_dir_1 * current_command_left);
 }
 
-void modeSwitch(int mode_desired) {
-  if (mode_desired == motorsActive) {
+// Engage or disengage motors.
+void EngageMotors(bool request_motors_active) {
+  if (request_motors_active != motors_active) {
+    switch (request_motors_active) {
+      case true:
+        Serial.println("Engaging motors.");
+        odrive.run_state(0, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
+        odrive.run_state(1, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
+        break;
+      case false:
+        Serial.println("Disengaging motors.");
+        odrive.run_state(0, AXIS_STATE_IDLE, false);
+        odrive.run_state(1, AXIS_STATE_IDLE, false);
+        break;
+    }
+    motors_active = request_motors_active;
   }
-  else {
-    if (mode_desired == 1) {
-      int requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL;
-      Serial.println("Engaging motors");
-      odrive.run_state(0, requested_state, false);
-      odrive.run_state(1, requested_state, false);
-    }
-    else if (mode_desired == 0) {
-      int requested_state = AXIS_STATE_IDLE;
-      Serial.println("Disengaging motors");
-      odrive.run_state(0, requested_state, false);
-      odrive.run_state(1, requested_state, false);
-    }
-    else {
-      Serial.println("Invalid mode selection");
-    }
-    motorsActive = mode_desired;
+}
+
+// RC PWM decder interrupt callbacks.
+void DecodeSteeringPwmInput() {
+  if (digitalRead(kSteeringPwmInputPin)) { // Signal went HIGH.
+    last_steering_pwm_rise_time = micros(); // save the rise time
   }
-  return;
+  else { // Signal went LOW.
+    steering_pwm = micros() - last_steering_pwm_rise_time;
+  }
+}
+
+void DecodeThrottlePwmInput() {
+  if (digitalRead(kThrottlePwmInputPin)) { // Signal went HIGH.
+    last_throttle_pwm_rise_time = micros(); // save the rise time
+  }
+  else { // Signal went LOW.
+    throttle_pwm = micros() - last_throttle_pwm_rise_time;
+  }
+}
+
+void DecodeEngagePwmInput() {
+  if (digitalRead(kEngagePwmInputPin)) { // Signal went HIGH.
+    last_engage_pwm_rise_time = micros(); // save the rise time
+  }
+  else { // Signal went LOW.
+    engage_pwm = micros() - last_engage_pwm_rise_time;
+  }
 }
