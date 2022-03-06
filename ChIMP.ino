@@ -1,3 +1,7 @@
+// Arduino sketch for a radio controlled twho-wheeled self balancing robot
+// using a BNO055 IMU module and an ODrive motor controller. Tested on
+// Arduino Mega 2560.
+
 #include <Wire.h>
 #include <Metro.h>
 #include <Adafruit_Sensor.h>
@@ -5,6 +9,7 @@
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
 
+namespace {
 // Hardware settings.
 constexpr unsigned short kLedPin = 13;
 constexpr unsigned short kThrottlePwmInputPin = 3;
@@ -52,6 +57,7 @@ ODriveArduino odrive(Serial2);
 Metro led_metro = Metro(kBlinkIntervalMs);
 Metro controller_metro = Metro(kControllerIntervalMs);
 Metro activation_metro = Metro(kActivationIntervalMs);
+}
 
 void setup() {
   pinMode(kLedPin, OUTPUT);
@@ -69,9 +75,9 @@ void setup() {
   last_throttle_pwm_rise_time = micros();
   last_steering_pwm_rise_time = micros();
   last_engage_pwm_rise_time = micros();
-  attachInterrupt(digitalPinToInterrupt(kSteeringPwmInputPin), DecodeSteeringPwmInput, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(kThrottlePwmInputPin), DecodeThrottlePwmInput, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), DecodeEngagePwmInput, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kSteeringPwmInputPin), SteeringPwmCallbackWrapper, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kThrottlePwmInputPin), ThrottlePwmCallbackWrapper, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), EngagePwmCallbackWrapper, CHANGE);
 
   // Check paramters for validity.
   if (!((kMotorDir0 == 1 || kMotorDir0 == -1) && (kMotorDir1 == 1 || kMotorDir1 == -1))) {
@@ -149,30 +155,25 @@ void EngageMotors(bool request_motors_active) {
   }
 }
 
-// RC PWM decder interrupt callbacks.
-void DecodeSteeringPwmInput() {
-  if (digitalRead(kSteeringPwmInputPin)) { // Signal went HIGH.
-    last_steering_pwm_rise_time = micros();
+// Generic interrupt callbback function for RC PWM decoding. Measures the high pulse duration in microseconds.
+void PwmInterruptCallback(unsigned long &last_rise_time, int &pwm_us, int pwm_input_pin) {
+  if (digitalRead(pwm_input_pin)) { // Signal went HIGH.
+    last_rise_time = micros();
   }
   else { // Signal went LOW.
-    steering_pwm = micros() - last_steering_pwm_rise_time;
+    pwm_us = micros() - last_rise_time;
   }
 }
 
-void DecodeThrottlePwmInput() {
-  if (digitalRead(kThrottlePwmInputPin)) { // Signal went HIGH.
-    last_throttle_pwm_rise_time = micros();
-  }
-  else { // Signal went LOW.
-    throttle_pwm = micros() - last_throttle_pwm_rise_time;
-  }
+// Wrappers for the three interrupt callbacks to decode the throttle, steering and engage PWM inputs.
+void ThrottlePwmCallbackWrapper() {
+  PwmInterruptCallback(last_throttle_pwm_rise_time, throttle_pwm, kThrottlePwmInputPin);
 }
 
-void DecodeEngagePwmInput() {
-  if (digitalRead(kEngagePwmInputPin)) { // Signal went HIGH.
-    last_engage_pwm_rise_time = micros();
-  }
-  else { // Signal went LOW.
-    engage_pwm = micros() - last_engage_pwm_rise_time;
-  }
+void SteeringPwmCallbackWrapper() {
+  PwmInterruptCallback(last_steering_pwm_rise_time, steering_pwm, kSteeringPwmInputPin);
+}
+
+void EngagePwmCallbackWrapper() {
+  PwmInterruptCallback(last_engage_pwm_rise_time, engage_pwm, kEngagePwmInputPin);
 }
