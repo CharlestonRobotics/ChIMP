@@ -15,6 +15,7 @@ def configure_motor(odrv, ax_num):
     ax.motor.config.requested_current_range = 25
     ax.motor.config.current_control_bandwidth = 100
     ax.motor.config.torque_constant = 1
+    ax.motor.config.current_lim = 15
     
 def configure_encoder(odrv, ax_num):
     axes = [odrv.axis0, odrv.axis1]
@@ -33,6 +34,7 @@ def configure_controllers(odrv, ax_num):
     ax.controller.config.vel_integrator_gain = 0.1 * torque_constant_estimate * ax.encoder.config.cpr
     ax.controller.config.vel_limit = 10
     ax.controller.config.control_mode = 1 # CONTROL_MODE_TORQUE_CONTROL
+    ax.controller.config.enable_torque_mode_vel_limit = False
     
 def calibrate_motor(odrv, ax_num):
     axes = [odrv.axis0, odrv.axis1]
@@ -81,6 +83,8 @@ def main():
     print("Connecting to ODrive...")
     odrv0 = odrive.find_any()
     
+    # Configure serial baudrate.
+    odrv0.config.uart_a_baudrate = 230400
     # Set DC voltage limits.
     odrv0.config.dc_bus_undervoltage_trip_level = 20
     odrv0.config.dc_bus_overvoltage_trip_level = 26

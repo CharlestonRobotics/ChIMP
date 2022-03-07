@@ -8,6 +8,9 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
+#if defined(USE_COMMAND_PROCESSOR)
+#include <Command_processor.h>
+#endif // defined(USE_COMMAND_PROCESSOR)
 
 namespace {
 // Hardware settings.
@@ -16,7 +19,7 @@ constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned long kSerialBaudratePc = 115200;
-constexpr unsigned long kSerialBaudrateOdrive = 115200;
+constexpr unsigned long kSerialBaudrateOdrive = 230400;
 constexpr int kMotorDir0 = 1;
 constexpr int kMotorDir1 = -1;
 
@@ -25,22 +28,23 @@ constexpr int kPwmCenterValue = 1500;
 constexpr int kEngageThresholdPwm = 1500;
 
 // Controller settings.
-constexpr float kKpBalance = 0.5;
-constexpr float kKdBalance = -0.065;
-constexpr float kKpDrive = 0.015;
-constexpr float kKpSteer = 0.01;
-constexpr float kKdSteer = 0.01;
+float kpBalance = 0.6;
+float kdBalance = -0.05;
+float kpDrive = 0.015;
+float kpSteer = 0.01;
+float kdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
-constexpr bool kUseWheelVelocities = false;
+constexpr int kEngageSignalPersistenceThreshold = 2;
 
 // Task scheduling settings.
 constexpr unsigned int kBlinkIntervalMs = 200;
-constexpr unsigned int kControllerIntervalMs = 10;
+constexpr unsigned int kControllerIntervalMs = 5;
 constexpr unsigned int kActivationIntervalMs = 50;
 
-// State flags.
+// State variables.
 bool motors_active = false; // motor state
 bool tilt_limit_exceeded = false;
+int engage_signal_persistence = 0;
 
 // PWM decoder variables.
 unsigned long last_throttle_pwm_rise_time = 0;
@@ -57,6 +61,10 @@ ODriveArduino odrive(Serial2);
 Metro led_metro = Metro(kBlinkIntervalMs);
 Metro controller_metro = Metro(kControllerIntervalMs);
 Metro activation_metro = Metro(kActivationIntervalMs);
+
+#if defined(USE_COMMAND_PROCESSOR)
+Command_processor cmd;
+#endif // defined(USE_COMMAND_PROCESSOR)
 }
 
 void setup() {
@@ -84,6 +92,12 @@ void setup() {
     Serial.println("Invalid motor direction paramters found. Halting for safety.");
     while (true);
   }
+#if defined(USE_COMMAND_PROCESSOR)
+  cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
+  cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
+  cmd.add_command('P', &PrintParametersWrapper, 0, "Print all settable parameter values.");
+#endif // defined(USE_COMMAND_PROCESSOR)
+  PrintControllerParameters();
   Serial.println("Starting ChIMP!");
 }
 
@@ -92,12 +106,24 @@ void loop() {
     MotionController();
   }
   if (activation_metro.check()) {
-    bool request_motor_activation = engage_pwm > kEngageThresholdPwm && !tilt_limit_exceeded;
+    // Avoid false positive disengagements due to noisy PWM by persistence filtering.
+    if (engage_pwm > kEngageThresholdPwm) {
+      ++ engage_signal_persistence;
+    }
+    else {
+      -- engage_signal_persistence;
+    }
+    engage_signal_persistence = constrain (engage_signal_persistence, -1 * kEngageSignalPersistenceThreshold, kEngageSignalPersistenceThreshold);
+    bool engage = engage_signal_persistence > 0 ? true : false;
+    bool request_motor_activation = engage && !tilt_limit_exceeded;
     EngageMotors(request_motor_activation);
   }
   if (led_metro.check()) {
     digitalWrite(kLedPin, !digitalRead(kLedPin));
   }
+#if defined(USE_COMMAND_PROCESSOR)
+  cmd.parse_command();
+#endif // defined(USE_COMMAND_PROCESSOR)
 }
 
 // Sample the IMU, compute current commands and send to the ODrive.
@@ -115,19 +141,11 @@ void MotionController() {
   }
 
   // Balance controller.
-  float balance_controller = euler_angles.z() * kKpBalance + gyro_rates.x() * kKdBalance;
+  float balance_controller = euler_angles.z() * kpBalance + gyro_rates.x() * kdBalance;
 
   // Planar motion controllers.
-  float planar_velocity = 0;
-  if (kUseWheelVelocities) {
-    // Get wheel velocities. This generates a lot of blocking serial traffic and might slow down the control loop.
-    float wheel_velocity_right = odrive.GetVelocity(0);
-    float wheel_velocity_left = odrive.GetVelocity(1);
-    planar_velocity = (wheel_velocity_right + wheel_velocity_left) / 2.0;
-  }
-  //TODO(LuSeKa): Scale the position controller output based on the planar velocity (if feasible).
-  float position_controller = kKpDrive * (throttle_pwm - kPwmCenterValue);
-  float steering_controller = kKpSteer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kKdSteer;
+  float position_controller = kpDrive * (throttle_pwm - kPwmCenterValue);
+  float steering_controller = kpSteer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kdSteer;
 
   float current_command_right = (balance_controller - position_controller - steering_controller);
   float current_command_left = (balance_controller - position_controller + steering_controller);
@@ -177,3 +195,33 @@ void SteeringPwmCallbackWrapper() {
 void EngagePwmCallbackWrapper() {
   PwmInterruptCallback(last_engage_pwm_rise_time, engage_pwm, kEngagePwmInputPin);
 }
+
+void PrintParameter(String name, float value) {
+  Serial.print(name);
+  Serial.print(":\t");
+  Serial.println(value);
+}
+
+void PrintControllerParameters() {
+  PrintParameter("kpBalance", kpBalance);
+  PrintParameter("kdBalance", kdBalance);
+  PrintParameter("kpDrive", kpDrive);
+  PrintParameter("kpSteer", kpSteer);
+  PrintParameter("kdSteer", kdSteer);
+}
+
+#if defined(USE_COMMAND_PROCESSOR)
+void PrintParametersWrapper(float a, float b) {
+  PrintControllerParameters();
+}
+
+void SetKpBalance(float value, float dummy) {
+  Serial.println("Setting kpBalance to " + String(value));
+  kpBalance = value;
+}
+
+void SetKdBalance(float value, float dummy) {
+  Serial.println("Setting kdBalance to " + String(value));
+  kdBalance = value;
+}
+#endif // defined(USE_COMMAND_PROCESSOR)
