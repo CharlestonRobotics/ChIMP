@@ -40,8 +40,6 @@ void setup() {
   odrive.SetCurrent(0, 0);
   odrive.SetCurrent(1, 0);
   Serial.println("Engaging motors");
-  odrive.run_state(0, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
-  odrive.run_state(1, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
   cmd.add_command('c', &CommandMotorCurrent, 2, "Command specified current to specified motor in mA.");
   cmd.add_command('s', &StopMotors, 0, "Stop both motors (disable).");
   cmd.add_command('b', &CommandBothMotorsCurrent, 1, "Command both motors to current in mA.");
