@@ -8,9 +8,7 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
-#if defined(USE_COMMAND_PROCESSOR)
 #include <Command_processor.h>
-#endif // defined(USE_COMMAND_PROCESSOR)
 
 namespace {
 // Hardware settings.
@@ -19,7 +17,7 @@ constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned long kSerialBaudratePc = 115200;
-constexpr unsigned long kSerialBaudrateOdrive = 230400;
+constexpr unsigned long kSerialBaudrateOdrive = 115200;
 constexpr int kMotorDir0 = 1;
 constexpr int kMotorDir1 = -1;
 
@@ -40,6 +38,7 @@ constexpr int kEngageSignalPersistenceThreshold = 2;
 constexpr unsigned int kBlinkIntervalMs = 200;
 constexpr unsigned int kControllerIntervalMs = 5;
 constexpr unsigned int kActivationIntervalMs = 50;
+constexpr unsigned int kPrintIntervalMs = 50;
 
 // State variables.
 bool motors_active = false; // motor state
@@ -54,6 +53,12 @@ int throttle_pwm = 0;
 int steering_pwm = 0;
 int engage_pwm = 0;
 
+// Interactive flags
+bool imu_enabled = true;
+bool rc_enabled = true;
+bool rc_print_enabled = false;
+bool motion_controller_enabled = true;
+
 Adafruit_BNO055 bno = Adafruit_BNO055();
 ODriveArduino odrive(Serial2);
 
@@ -61,10 +66,8 @@ ODriveArduino odrive(Serial2);
 Metro led_metro = Metro(kBlinkIntervalMs);
 Metro controller_metro = Metro(kControllerIntervalMs);
 Metro activation_metro = Metro(kActivationIntervalMs);
-
-#if defined(USE_COMMAND_PROCESSOR)
+Metro print_metro = Metro(kPrintIntervalMs);
 Command_processor cmd;
-#endif // defined(USE_COMMAND_PROCESSOR)
 }
 
 void setup() {
@@ -88,22 +91,35 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), EngagePwmCallbackWrapper, CHANGE);
 
   // Check paramters for validity.
-  if (!((kMotorDir0 == 1 || kMotorDir0 == -1) && (kMotorDir1 == 1 || kMotorDir1 == -1))) {
-    Serial.println("Invalid motor direction paramters found. Halting for safety.");
+  bool parametsr_valid = (kMotorDir0 == 1 || kMotorDir0 == -1) &&
+                         (kMotorDir1 == 1 || kMotorDir1 == -1);
+  if (!parametsr_valid) {
+    Serial.println("Invalid parameters found. Halting for safety.");
     while (true);
   }
-#if defined(USE_COMMAND_PROCESSOR)
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
-  cmd.add_command('P', &PrintParametersWrapper, 0, "Print all settable parameter values.");
-#endif // defined(USE_COMMAND_PROCESSOR)
-  PrintControllerParameters();
-  Serial.println("Starting ChIMP!");
+  cmd.add_command('r', &PrintControllerParameters, 0, "Print all controller parameters.");
+  cmd.add_command('q', &DisableImu, 0, "Disable IMU.");
+  cmd.add_command('w', &EnableImu, 0, "Enable IMU.");
+  cmd.add_command('t', &EnableRcPrint, 0, "Enable periodic PWM printout.");
+  cmd.add_command('z', &DisableRcPrint, 0, "Disable periodic PWM printout.");
+  cmd.add_command('u', &EnableRcControl, 0, "Enable RC control.");
+  cmd.add_command('i', &DisableRcControl, 0, "Disable RC control.");
+  cmd.add_command('k', &EnableMotionController, 0, "Enable motion controller.");
+  cmd.add_command('l', &DisableMotionController, 0, "Disable motion controller.");
 }
 
 void loop() {
   if (controller_metro.check()) {
+    if (motion_controller_enabled) {
     MotionController();
+    }
+  }
+  if (print_metro.check()) {
+    if (rc_print_enabled) {
+      PrintRcSignals();
+    }
   }
   if (activation_metro.check()) {
     // Avoid false positive disengagements due to noisy PWM by persistence filtering.
@@ -121,9 +137,7 @@ void loop() {
   if (led_metro.check()) {
     digitalWrite(kLedPin, !digitalRead(kLedPin));
   }
-#if defined(USE_COMMAND_PROCESSOR)
   cmd.parse_command();
-#endif // defined(USE_COMMAND_PROCESSOR)
 }
 
 // Sample the IMU, compute current commands and send to the ODrive.
@@ -131,6 +145,13 @@ void MotionController() {
   // Sample the IMU.
   imu::Vector<3> euler_angles = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   imu::Vector<3> gyro_rates = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+  float pitch = imu_enabled * euler_angles.z();
+  float pitch_rate = imu_enabled * gyro_rates.x();
+  float yaw_rate = imu_enabled * gyro_rates.z();
+
+  int throttle = rc_enabled * (throttle_pwm - kPwmCenterValue);
+  int steering = rc_enabled * (steering_pwm - kPwmCenterValue);
 
   // Update the tilt safety flag based on the latest IMU reading.
   if (abs(euler_angles.z()) > kTiltDisengageThresholdDegrees) {
@@ -141,11 +162,11 @@ void MotionController() {
   }
 
   // Balance controller.
-  float balance_controller = euler_angles.z() * kpBalance + gyro_rates.x() * kdBalance;
+  float balance_controller = pitch * kpBalance + pitch_rate * kdBalance;
 
   // Planar motion controllers.
-  float position_controller = kpDrive * (throttle_pwm - kPwmCenterValue);
-  float steering_controller = kpSteer * (steering_pwm - kPwmCenterValue) + gyro_rates.z() * kdSteer;
+  float position_controller = kpDrive * throttle;
+  float steering_controller = kpSteer * steering + yaw_rate * kdSteer;
 
   float current_command_right = (balance_controller - position_controller - steering_controller);
   float current_command_left = (balance_controller - position_controller + steering_controller);
@@ -202,7 +223,7 @@ void PrintParameter(String name, float value) {
   Serial.println(value);
 }
 
-void PrintControllerParameters() {
+void PrintControllerParameters(float foo, float bar) {
   PrintParameter("kpBalance", kpBalance);
   PrintParameter("kdBalance", kdBalance);
   PrintParameter("kpDrive", kpDrive);
@@ -210,18 +231,62 @@ void PrintControllerParameters() {
   PrintParameter("kdSteer", kdSteer);
 }
 
-#if defined(USE_COMMAND_PROCESSOR)
-void PrintParametersWrapper(float a, float b) {
-  PrintControllerParameters();
+void PrintRcSignals() {
+  Serial.print(throttle_pwm);
+  Serial.print('\t');
+  Serial.print(steering_pwm);
+  Serial.print('\t');
+  Serial.println(engage_pwm);
 }
 
-void SetKpBalance(float value, float dummy) {
+void SetKpBalance(float value, float foo) {
   Serial.println("Setting kpBalance to " + String(value));
   kpBalance = value;
 }
 
-void SetKdBalance(float value, float dummy) {
+void SetKdBalance(float value, float foo) {
   Serial.println("Setting kdBalance to " + String(value));
   kdBalance = value;
 }
-#endif // defined(USE_COMMAND_PROCESSOR)
+
+void EnableImu(float foo, float bar) {
+  Serial.println("Enabling IMU.");
+  imu_enabled = true;
+}
+
+void DisableImu(float foo, float bar) {
+  Serial.println("Disabling IMU.");
+  imu_enabled = false;
+}
+
+void EnableRcControl(float foo, float bar) {
+  Serial.println("Enabling RC control.");
+  rc_enabled = true;
+}
+
+void DisableRcControl(float foo, float bar) {
+  Serial.println("Disabling RC control.");
+  rc_enabled = false;
+}
+
+void EnableMotionController(float foo, float bar) {
+  Serial.println("Enabling motion controller.");
+  motion_controller_enabled = true;
+}
+
+void DisableMotionController(float foo, float bar) {
+  Serial.println("Disabling motion controller.");
+  odrive.SetCurrent(0, 0);
+  odrive.SetCurrent(1, 0);
+  motion_controller_enabled = false;
+}
+
+void EnableRcPrint(float foo, float bar) {
+  Serial.println("Enabling PWM printout.");
+  rc_print_enabled = true;
+}
+
+void DisableRcPrint(float foo, float bar) {
+  Serial.println("Disabling PWM printout.");
+  rc_print_enabled = false;
+}

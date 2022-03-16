@@ -45,6 +45,7 @@ def calibrate_motor(odrv, ax_num):
     while ax.motor.is_armed:
         pass
     time.sleep(1)
+    # Todo(LuSeKa): Check for and handle possible errors.
     ax.motor.config.pre_calibrated = True
     
 def calibrate_encoder(odrv, ax_num):
@@ -62,6 +63,7 @@ def calibrate_encoder(odrv, ax_num):
     while ax.motor.is_armed:
         pass
     time.sleep(1)
+    # Todo(LuSeKa): Check for and handle possible errors.
     ax.encoder.config.pre_calibrated = True
 
 def main():
@@ -82,9 +84,9 @@ def main():
     
     print("Connecting to ODrive...")
     odrv0 = odrive.find_any()
-    
+    print("Setting parameters...")
     # Configure serial baudrate.
-    odrv0.config.uart_a_baudrate = 230400
+    odrv0.config.uart_a_baudrate = 115200
     # Set DC voltage limits.
     odrv0.config.dc_bus_undervoltage_trip_level = 20
     odrv0.config.dc_bus_overvoltage_trip_level = 26
@@ -111,40 +113,24 @@ def main():
     try:
         odrv0.save_configuration()
     except:
-        print("Saving...")
-    # Re-discover ODrive.
-    odrv0 = odrive.find_any()
-    try:
-        odrv0.reboot()
-    except:
-        print("Rebooting...")
+        print("Save and reboot...")
     # Re-discover ODrive.
     odrv0 = odrive.find_any()
     calibrate_motor(odrv0, ax_num)
-    calibrate_encoder(odrv0, ax_num)
+    calibrate_encoder(odrv0, ax_num)    
     
-    
-    
-   # Save configuration.
+    # Save configuration.
     try:
         odrv0.save_configuration()
     except:
-        print("Saving...")
-    # Re-discover ODrive.
-    odrv0 = odrive.find_any()
-    try:
-        odrv0.reboot()
-    except:
-        print("Rebooting...")
+        print("Save and reboot...")
     # Re-discover ODrive.
     odrv0 = odrive.find_any()
     system_error = odrv0.error
     if not system_error:
         print(f"Succesfully calibrated axis{ax_num}!")
     else:
-        print(f"An error has occured: odrv0.error = {system_error}.")
-        
-    
+        print(f"An error has occured: odrv0.error = {system_error}.")    
     
 if __name__ == "__main__":
     main()
