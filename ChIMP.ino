@@ -26,8 +26,8 @@ constexpr int kPwmCenterValue = 1500;
 constexpr int kEngageThresholdPwm = 1500;
 
 // Controller settings.
-float kpBalance = 0.6;
-float kdBalance = -0.05;
+float kpBalance = 0.55;
+float kdBalance = -0.045;
 float kpDrive = 0.015;
 float kpSteer = 0.01;
 float kdSteer = 0.01;
@@ -36,7 +36,7 @@ constexpr int kEngageSignalPersistenceThreshold = 2;
 
 // Task scheduling settings.
 constexpr unsigned int kBlinkIntervalMs = 200;
-constexpr unsigned int kControllerIntervalMs = 5;
+constexpr unsigned int kControllerIntervalMs = 10;
 constexpr unsigned int kActivationIntervalMs = 50;
 constexpr unsigned int kPrintIntervalMs = 50;
 
@@ -100,20 +100,16 @@ void setup() {
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
   cmd.add_command('r', &PrintControllerParameters, 0, "Print all controller parameters.");
-  cmd.add_command('q', &DisableImu, 0, "Disable IMU.");
-  cmd.add_command('w', &EnableImu, 0, "Enable IMU.");
-  cmd.add_command('t', &EnableRcPrint, 0, "Enable periodic PWM printout.");
-  cmd.add_command('z', &DisableRcPrint, 0, "Disable periodic PWM printout.");
-  cmd.add_command('u', &EnableRcControl, 0, "Enable RC control.");
-  cmd.add_command('i', &DisableRcControl, 0, "Disable RC control.");
-  cmd.add_command('k', &EnableMotionController, 0, "Enable motion controller.");
-  cmd.add_command('l', &DisableMotionController, 0, "Disable motion controller.");
+  cmd.add_command('w', &EnableImu, 0, "Enable/disable IMU.");
+  cmd.add_command('t', &EnableRcPrint, 0, "Enable/disable periodic PWM printout.");
+  cmd.add_command('u', &EnableRcControl, 0, "Enable/disable RC control.");
+  cmd.add_command('k', &EnableMotionController, 0, "Enable/disable motion controller.");
 }
 
 void loop() {
   if (controller_metro.check()) {
     if (motion_controller_enabled) {
-    MotionController();
+      MotionController();
     }
   }
   if (print_metro.check()) {
@@ -250,43 +246,43 @@ void SetKdBalance(float value, float foo) {
 }
 
 void EnableImu(float foo, float bar) {
-  Serial.println("Enabling IMU.");
-  imu_enabled = true;
-}
-
-void DisableImu(float foo, float bar) {
-  Serial.println("Disabling IMU.");
-  imu_enabled = false;
+  if (imu_enabled) {
+    Serial.println("Disabling IMU.");
+    imu_enabled = false;
+  } else {
+    Serial.println("Enabling IMU.");
+    imu_enabled = true;
+  }
 }
 
 void EnableRcControl(float foo, float bar) {
-  Serial.println("Enabling RC control.");
-  rc_enabled = true;
-}
-
-void DisableRcControl(float foo, float bar) {
-  Serial.println("Disabling RC control.");
-  rc_enabled = false;
+  if (rc_enabled) {
+    Serial.println("Disabling RC control.");
+    rc_enabled = false;
+  } else {
+    Serial.println("Enabling RC control.");
+    rc_enabled = true;
+  }
 }
 
 void EnableMotionController(float foo, float bar) {
-  Serial.println("Enabling motion controller.");
-  motion_controller_enabled = true;
-}
-
-void DisableMotionController(float foo, float bar) {
-  Serial.println("Disabling motion controller.");
-  odrive.SetCurrent(0, 0);
-  odrive.SetCurrent(1, 0);
-  motion_controller_enabled = false;
+  if (motion_controller_enabled) {
+    Serial.println("Disabling motion controller.");
+    motion_controller_enabled = false;
+    odrive.SetCurrent(0, 0);
+    odrive.SetCurrent(1, 0);
+  } else {
+    Serial.println("Enabling motion controller.");
+    motion_controller_enabled = true;
+  }
 }
 
 void EnableRcPrint(float foo, float bar) {
-  Serial.println("Enabling PWM printout.");
-  rc_print_enabled = true;
-}
-
-void DisableRcPrint(float foo, float bar) {
-  Serial.println("Disabling PWM printout.");
-  rc_print_enabled = false;
+  if (rc_print_enabled) {
+    Serial.println("Disabling PWM printout.");
+    rc_print_enabled = false;
+  } else {
+    Serial.println("Enabling PWM printout.");
+    rc_print_enabled = true;
+  }
 }
