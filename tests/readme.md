@@ -66,7 +66,7 @@ They represent the three signals’ pulse widths in microseconds and should be c
 * Using the enable input on your transmitter, enable the robot. *The wheels will likely start spinning at this point.*
 * If you tilt the robot, the wheels should react by spinning faster or slower.
 * The wheels should spin such that they would make the robot drive in the direction it is leaning towards.
-* * TODO(LuSeKa): What to do if the wheels spin the wrong way?
+* TODO(LuSeKa): What to do if the wheels spin the wrong way?
 
 If all these test pass, your ChIMP might be ready to roll!
 
