@@ -8,9 +8,15 @@ Here are the steps to do that:
 
 * Follow the steps in the [tools/readme](https://github.com/CharlestonRobotics/ChIMP/blob/master/tools) to configure the ODrive. You should see the motors sping during calibration. If that's the case, go to the next step. If not, you are in for some troubleshooting. 
 * With the ODrive powered and connected to your computer via USB, launch the [odrivetool](https://docs.odriverobotics.com/v/latest/getting-started.html#start-odrivetool).
-* Enable motor 0 (in ODrive speak, axis0):
+* Enable motor 0 (in ODrive speak, axis0): 
+
+``odrv0.axis0.requested_state = AXIS_STATE_CLOSE_LOOP_CONTROL``
 * Send a few current commands to your motor. Start small (e.g. 500mA) and see at which current it starts spinning:
-* Disable motor 0:
+
+``odrv0.axis0.controller.torque_setpoint = 0.5``
+* Disable motor 0: 
+
+``odrv0.axis0.requested_state = AXIS_STATE_IDLE``
 * Do the same for motor 1.
 
 Both motors should behave roughly the same for the same amount of current.
