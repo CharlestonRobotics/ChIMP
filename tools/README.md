@@ -6,7 +6,8 @@ All you need to do is
 2. Make sure both motors are ABSOLUTELY FREE TO TURN (put the robot on a stand)
 3. Connect the ODrive to your computer via USB
 4. Power up the ODrive
-5. Run the script using a python3 interpreter. On Linux this will look like so for motor 0
+5. In a system terminal, navigate to the ChIMP/tools folder.
+6. Run the script using a python3 interpreter. On Linux this will look like so for motor 0
 ```console
 ./odrive_setup.py -a 0
 ```
