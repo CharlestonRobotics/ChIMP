@@ -58,7 +58,7 @@ def encoder_error_to_string(error):
     elif error == odrive.enums.ENCODER_ERROR_UNSUPPORTED_ENCODER_MODE:
         return "ENCODER_ERROR_UNSUPPORTED_ENCODER_MODE"
     else:
-        return f"Unknown encoder error (error code {error})"
+        return f"Unknown encoder error code: {error}"
 
 
 def motor_error_to_string(error):
@@ -119,7 +119,7 @@ def motor_error_to_string(error):
     elif error == odrive.enums.MOTOR_ERROR_UNKNOWN_VOLTAGE_COMMAND:
         return "MOTOR_ERROR_UNKNOWN_VOLTAGE_COMMAND"
     else:
-        return f"Unknown motor error (error code {error})"
+        return f"Unknown motor error code: {error}"
 
 
 def odrive_error_to_string(error):
@@ -142,7 +142,7 @@ def odrive_error_to_string(error):
     elif error == odrive.enums.ODRIVE_ERROR_NONE:
         return "ODRIVE_ERROR_NONE"
     else:
-        return f"Unknown odrive error (error code {error})"
+        return f"Unknown odrive error code: {error}"
 
 
 def calibrate_motor(ax):
