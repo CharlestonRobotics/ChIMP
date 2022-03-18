@@ -1,5 +1,7 @@
 # Automated ODrive setup for ChIMP
-Once you installed all tools following these instructions https://docs.odriverobotics.com/#downloading-and-installing-tools this script takes care of setting up the ODrive. This will only work if the wiring of the motors and Hall sensors is correct.
+Once you installed all tools following these instructions https://docs.odriverobotics.com/#downloading-and-installing-tools, this script takes care of setting up the ODrive for ChIMP. This will only succeed if the wiring of the motors and Hall sensors is correct - if it is not, setup will fail and the script will tell you what is wrong.
+
+If you have already fully built your ChIMP, ***make sure the Arduino is powerd off for this test***.
 
 All you need to do is 
 1. Wire up the ODrive and the motors
