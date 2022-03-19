@@ -12,7 +12,7 @@ Here are the steps:
 * Enable motor 0 (in ODrive speak, axis0): 
 
 ``odrv0.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL``
-* Send a few current commands to your motor. Start small (e.g. 500mA) and see at which current it starts spinning:
+* Send a few current commands to your motor. Start small (e.g. 500mA) and see at which current iTht starts spinning:
 
 ``odrv0.axis0.controller.input_torque = 0.5``
 * Disable motor 0: 
@@ -20,7 +20,20 @@ Here are the steps:
 ``odrv0.axis0.requested_state = AXIS_STATE_IDLE``
 * Do the same for motor 1 (aka axis1).
 
-Both motors should behave roughly the same for the same amount of current.
+Both motors should behave roughly the same for the same amount of current. 
+*If you see the script terminating with encoder errors, you can run the Hall test.*
+
+# Testing the Hall encoders without the ODrive
+For this test, wire the Hall sensors directly to the Arduino. The red wire goes to 5V and the black to GND.
+The other three wires (signals A, B and C) will be connected to the Ardunino pins A0, A1 and A2 - the order does not matter.
+
+* Connect the Arduino to your computer and load the hall_test.ino sketch.
+* Open the serial terminal. You will see 5 collmuns of numbers:
+The first three numbers make up the current hall sensor state. 
+The fourth number is the counter of valid state transitions. On a healthy motor, this should increase by exactly 90 per rotation.
+The fifth number is the counter of invalid or 'illegal' state transitions. This should always be 0. 
+* If the fifth number ever goes beyond 0, something is wrong with the Hall encoders and the ODrive won't be able to calibrate properly.
+* You can reset the counters by typing ```r``` in the serial terminal and hitting ENTER. 
 
 # Testing Arduino, ODrive and motors
 Hopefully the previous test went well. If so, let's put the Arduino in the loop!
