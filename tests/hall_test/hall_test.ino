@@ -1,8 +1,8 @@
 #include "Command_processor.h" // https://github.com/LuSeKa/command_processor
 
 constexpr int kHallPins[3] = {A0, A1, A2};
-int hall_state[3] = {0, 0, 0};
-int last_hall_state[3] = {0, 0, 0};
+uint8_t hall_state[3] = {0, 0, 0};
+uint8_t last_hall_state[3] = {0, 0, 0};
 unsigned long counts = 0;
 unsigned long illegal_counts = 0;
 
@@ -38,7 +38,7 @@ void loop() {
   delay(5);
 }
 
-bool IsHallStateEqual(int* a, int* b) {
+bool IsHallStateEqual(uint8_t* a, uint8_t* b) {
   for (int i = 0; i < 3; ++i) {
     if(a[i] != b[i]) {
       return false;
@@ -47,12 +47,12 @@ bool IsHallStateEqual(int* a, int* b) {
   return true;
 }
 
-void CopyHallState(int* source, int* target) {
+void CopyHallState(uint8_t* source, uint8_t* target) {
   memcpy(target, source, 3);
 }
 
-bool IsHallStateIllegal(int* state) {
-  int hallSum = state[0] + state[1] + state[2];
+bool IsHallStateIllegal(uint8_t* state) {
+  uint8_t hallSum = state[0] + state[1] + state[2];
   return (hallSum == 0 || hallSum == 3);
 }
 
