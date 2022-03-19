@@ -1,6 +1,7 @@
 #include "Command_processor.h" // https://github.com/LuSeKa/command_processor
 
 constexpr int kHallPins[3] = {A0, A1, A2};
+int hall_state[3] = {0, 0, 0};
 int last_hall_state[3] = {0, 0, 0};
 unsigned long counts = 0;
 unsigned long illegal_counts = 0;
@@ -8,7 +9,6 @@ unsigned long illegal_counts = 0;
 Command_processor cmd;
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   for (int i = 0; i < 3; ++i) {
     pinMode(kHallPins[i], INPUT_PULLUP);
@@ -17,15 +17,13 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  int hall_state[3];
   for (int i = 0; i < 3; ++i) {
     hall_state[i] = digitalRead(kHallPins[i]);
     Serial.print(hall_state[i]);
     Serial.print('\t');
   }
   if (!IsHallStateEqual(hall_state, last_hall_state)) {
-    // Hall state has changed
+    // Hall state has changed.
     if (IsHallStateIllegal(hall_state)) {
       ++illegal_counts;
     } else {
@@ -50,9 +48,7 @@ bool IsHallStateEqual(int* a, int* b) {
 }
 
 void CopyHallState(int* source, int* target) {
-  for (int i = 0; i < 3; ++i) {
-    target[i] = source[i];
-  }
+  memcpy(target, source, 3);
 }
 
 bool IsHallStateIllegal(int* state) {
