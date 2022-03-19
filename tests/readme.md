@@ -27,8 +27,8 @@ Both motors should behave roughly the same for the same amount of current.
 For this test, wire the Hall sensors directly to the Arduino. The red wire goes to 5V and the black to GND.
 The other three wires (signals A, B and C) will be connected to the Ardunino pins A0, A1 and A2 - the order does not matter.
 
-* Connect the Arduino to your computer and load the hall_test.ino sketch.
-* Open the serial terminal. You will see 5 collmuns of numbers:
+* Connect the Arduino to your computer and load the [hall_test.ino sketch](https://github.com/CharlestonRobotics/ChIMP/blob/master/tests/hall_test/hall_test.ino).
+* Open the serial terminal. You will see 5 collumns of numbers:
 The first three numbers make up the current hall sensor state. 
 The fourth number is the counter of valid state transitions. On a healthy motor, this should increase by exactly 90 per rotation.
 The fifth number is the counter of invalid or 'illegal' state transitions. This should always be 0. 
