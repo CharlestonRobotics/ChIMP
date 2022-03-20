@@ -21,7 +21,7 @@ def configure_encoder(ax, ignore_illegal_hall_state):
     ax.encoder.config.mode = 1 # ENCODER_MODE_HALL
     ax.encoder.config.cpr = 90
     ax.encoder.config.calib_scan_distance = 150
-    ax.encoder.config.bandwidth = 500
+    ax.encoder.config.bandwidth = 250
     ax.encoder.config.ignore_illegal_hall_state = ignore_illegal_hall_state
 
 

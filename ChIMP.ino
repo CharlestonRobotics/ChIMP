@@ -33,6 +33,7 @@ float kpSteer = 0.01;
 float kdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
+constexpr float kMaxAbsCurrent = 10.0;
 
 // Task scheduling settings.
 constexpr unsigned int kBlinkIntervalMs = 200;
@@ -167,6 +168,9 @@ void MotionController() {
   float current_command_right = (balance_controller - position_controller - steering_controller);
   float current_command_left = (balance_controller - position_controller + steering_controller);
 
+  current_command_right = ConstrainFloat(current_command_right, -1 * kMaxAbsCurrent, kMaxAbsCurrent);
+  current_command_left = ConstrainFloat(current_command_left, -1 * kMaxAbsCurrent, kMaxAbsCurrent);
+
   odrive.SetCurrent(0, kMotorDir0 * current_command_right);
   odrive.SetCurrent(1, kMotorDir1 * current_command_left);
 }
@@ -211,6 +215,16 @@ void SteeringPwmCallbackWrapper() {
 
 void EngagePwmCallbackWrapper() {
   PwmInterruptCallback(last_engage_pwm_rise_time, engage_pwm, kEngagePwmInputPin);
+}
+
+float ConstrainFloat(float input, float lower, float upper) {
+  if (input < lower) {
+    return lower;
+  } else if (input > upper) {
+    return upper;
+  } else {
+    return input;
+  }
 }
 
 void PrintParameter(String name, float value) {
