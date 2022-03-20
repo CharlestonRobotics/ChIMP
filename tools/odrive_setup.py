@@ -10,18 +10,19 @@ import time
 
 def configure_motor(ax):
     ax.motor.config.pole_pairs = 15
-    ax.motor.config.resistance_calib_max_voltage = 6
+    ax.motor.config.resistance_calib_max_voltage = 5
     ax.motor.config.requested_current_range = 25
     ax.motor.config.current_control_bandwidth = 100
     ax.motor.config.torque_constant = 1
     ax.motor.config.current_lim = 15
 
 
-def configure_encoder(ax):
+def configure_encoder(ax, ignore_illegal_hall_state):
     ax.encoder.config.mode = 1 # ENCODER_MODE_HALL
     ax.encoder.config.cpr = 90
     ax.encoder.config.calib_scan_distance = 150
-    ax.encoder.config.bandwidth = 100
+    ax.encoder.config.bandwidth = 500
+    ax.encoder.config.ignore_illegal_hall_state = ignore_illegal_hall_state
 
 
 def configure_controllers(ax):
@@ -186,15 +187,24 @@ def main():
     )
     parser.add_argument(
         "-a",
-        metavar = "axis",
         type = int,
         required = True,
         choices = [0, 1],
         help = "Axis to be configured. Can be 0 or 1.",
     )
+    parser.add_argument(
+        "-i",
+        required = False,
+        action='store_true',
+        help = "Ignore encoder error ENCODER_ERROR_ILLEGAL_HALL_STATE.",
+    )
     args = parser.parse_args()
     ax_num = args.a
-    print(f"### Configuring axis{ax_num} ###\n")
+    ignore_hall_error = args.i
+    print(f"### Configuring axis{ax_num} ###")
+    if ignore_hall_error:
+        print("Setting ignore_illegal_hall_state = True")
+    print('')
     
     print("Connecting to ODrive...")
     odrv0 = odrive.find_any()
@@ -204,10 +214,10 @@ def main():
     # Configure serial baudrate.
     odrv0.config.uart_a_baudrate = 115200
     # Set DC voltage limits.
-    odrv0.config.dc_bus_undervoltage_trip_level = 20
+    odrv0.config.dc_bus_undervoltage_trip_level = 19
     odrv0.config.dc_bus_overvoltage_trip_level = 26
     # Set admissable battery charing current.
-    odrv0.config.dc_max_negative_current = -5
+    odrv0.config.dc_max_negative_current = -10
     # We don't need a brake resistor since ChIMP is battery powered.
     odrv0.config.enable_brake_resistor = False
     
@@ -222,7 +232,7 @@ def main():
     odrv0.config.gpio5_mode = 0 # GPIO_MODE_DIGITAL
 
     configure_motor(ax)
-    configure_encoder(ax)
+    configure_encoder(ax, ignore_hall_error)
     configure_controllers(ax)
     
     # Save configuration.
@@ -241,11 +251,19 @@ def main():
 
     encoder_error = calibrate_encoder_polarity(ax)
     if encoder_error:
-        sys.exit(f"Encoder polarity calibration failed with encoder error {encoder_error_to_string(encoder_error)}.")
+        if (encoder_error == odrive.enums.ENCODER_ERROR_ILLEGAL_HALL_STATE) and ignore_hall_error:
+            print("Encountered illegal hall state during encoder polarity calibration. Ignoring as requested.")
+            ax.encoder.error = odrive.enums.ENCODER_ERROR_NONE
+        else:
+            sys.exit(f"Encoder polarity calibration failed with encoder error {encoder_error_to_string(encoder_error)}.")
 
     encoder_error = calibrate_encoder_offset(ax)
     if encoder_error:
-        sys.exit(f"Encoder offset calibration failed with encoder error {encoder_error_to_string(encoder_error)}.")
+        if (encoder_error == odrive.enums.ENCODER_ERROR_ILLEGAL_HALL_STATE) and ignore_hall_error:
+            print("Encountered illegal hall state during encoder offset calibration. Ignoring as requested.")
+            ax.encoder.error = odrive.enums.ENCODER_ERROR_NONE
+        else:
+            sys.exit(f"Encoder offset calibration failed with encoder error {encoder_error_to_string(encoder_error)}.")
 
     ax.encoder.config.pre_calibrated = True
 

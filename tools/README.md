@@ -9,7 +9,7 @@ All you need to do is
 3. Connect the ODrive to your computer via USB
 4. Power up the ODrive
 5. In a system terminal, navigate to the ChIMP/tools folder.
-6. Run the script using a python3 interpreter. On Linux this will look like so for motor 0
+6. Run the script using a python3 interpreter, passing in the requested axis as argument. On Linux this will look like so for motor 0
 ```console
 ./odrive_setup.py -a 0
 ```
@@ -17,3 +17,9 @@ and like so for motor 1
 ```console
 ./odrive_setup.py -a 1
 ``` 
+
+If you are seeing Hall sensor errors, you can set the ODrive to ignore some of them by passing in the -i flag the script, e.g.
+```console
+./odrive_setup.py -a 0 -i
+```
+

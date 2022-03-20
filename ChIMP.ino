@@ -28,7 +28,7 @@ constexpr int kEngageThresholdPwm = 1500;
 // Controller settings.
 float kpBalance = 0.55;
 float kdBalance = -0.045;
-float kpDrive = 0.015;
+float kpDrive = 0.011;
 float kpSteer = 0.01;
 float kdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
