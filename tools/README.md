@@ -18,7 +18,7 @@ and like so for motor 1
 ./odrive_setup.py -a 1
 ``` 
 
-If you are seeing Hall sensor errors, you can set the ODrive to ignore some of them by passing in the -i flag the script, e.g.
+If you are seeing Hall sensor errors, you can set the ODrive to ignore some of them by passing in the -i flag to the script, e.g.
 ```console
 ./odrive_setup.py -a 0 -i
 ```
