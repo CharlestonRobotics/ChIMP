@@ -15,6 +15,7 @@ def configure_motor(ax):
     ax.motor.config.current_control_bandwidth = 100
     ax.motor.config.torque_constant = 1
     ax.motor.config.current_lim = 15
+    ax.motor.config.current_lim_margin = 15
 
 
 def configure_encoder(ax, ignore_illegal_hall_state):
@@ -32,7 +33,46 @@ def configure_controllers(ax):
     ax.controller.config.vel_integrator_gain = 0.1 * torque_constant_estimate * ax.encoder.config.cpr
     ax.controller.config.vel_limit = 10
     ax.controller.config.control_mode = 1 # CONTROL_MODE_TORQUE_CONTROL
+    # Since we operate in current control mode we want to ignore overspeed errors.
     ax.controller.config.enable_torque_mode_vel_limit = False
+    # Push the spinout threshholds out to avoid false positive spinout detections.
+    ax.controller.config.spinout_mechanical_power_threshold = -100;
+    ax.controller.config.spinout_electrical_power_threshold = 100;
+
+
+def calibrate_motor(ax):
+    print("Calibrating motor...")
+    ax.requested_state = odrive.enums.AXIS_STATE_MOTOR_CALIBRATION
+    time.sleep(1) # Wait for calibration to start.
+    while ax.motor.is_armed:
+        pass
+    time.sleep(1)
+    phase_inductance = ax.motor.config.phase_inductance
+    phase_resistance = ax.motor.config.phase_resistance
+    print(f"Motor calibration result:\n\tPhase inductance: {phase_inductance}\n\tPhase resistance: {phase_resistance}")
+    return ax.motor.error
+
+
+def calibrate_encoder_polarity(ax):
+    print("Calibrating hall encoder polarity...")
+    ax.requested_state = odrive.enums.AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION
+    time.sleep(1) # Wait for calibration to start.
+    while ax.motor.is_armed:
+        pass
+    time.sleep(1)
+    return ax.encoder.error
+
+
+def calibrate_encoder_offset(ax):
+    print("Calibrating encoder offset...")
+    ax.requested_state = odrive.enums.AXIS_STATE_ENCODER_OFFSET_CALIBRATION
+    time.sleep(1) # Wait for calibration to start.
+    while ax.motor.is_armed:
+        pass
+    time.sleep(1)
+    phase_offset = ax.encoder.config.phase_offset_float
+    print(f"Encoder calibration result:\n\tPhase offset: {phase_offset}")
+    return ax.encoder.error
 
 
 def encoder_error_to_string(error):
@@ -146,41 +186,6 @@ def odrive_error_to_string(error):
         return f"Unknown odrive error code: {error}"
 
 
-def calibrate_motor(ax):
-    print("Calibrating motor...")
-    ax.requested_state = 4 # AXIS_STATE_MOTOR_CALIBRATION
-    time.sleep(1) # Wait for calibration to start.
-    while ax.motor.is_armed:
-        pass
-    time.sleep(1)
-    phase_inductance = ax.motor.config.phase_inductance
-    phase_resistance = ax.motor.config.phase_resistance
-    print(f"Motor calibration result:\n\tPhase inductance: {phase_inductance}\n\tPhase resistance: {phase_resistance}")
-    return ax.motor.error
-
-
-def calibrate_encoder_polarity(ax):
-    print("Calibrating hall encoder polarity...")
-    ax.requested_state = 12 # AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION
-    time.sleep(1) # Wait for calibration to start.
-    while ax.motor.is_armed:
-        pass
-    time.sleep(1)
-    return ax.encoder.error
-
-
-def calibrate_encoder_offset(ax):
-    print("Calibrating encoder offset...")
-    ax.requested_state = 7 # AXIS_STATE_ENCODER_OFFSET_CALIBRATION
-    time.sleep(1) # Wait for calibration to start.
-    while ax.motor.is_armed:
-        pass
-    time.sleep(1)
-    phase_offset = ax.encoder.config.phase_offset_float
-    print(f"Encoder calibration result:\n\tPhase offset: {phase_offset}")
-    return ax.encoder.error
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="""Odrive Setup for ChIMP robot."""
@@ -222,14 +227,14 @@ def main():
     odrv0.config.enable_brake_resistor = False
     
     # Configure GPIO for hall sensors of motor0
-    odrv0.config.gpio9_mode = 0 # GPIO_MODE_DIGITAL
-    odrv0.config.gpio10_mode = 0 # GPIO_MODE_DIGITAL
-    odrv0.config.gpio11_mode = 0 # GPIO_MODE_DIGITAL
+    odrv0.config.gpio9_mode = odrive.enums.GPIO_MODE_DIGITAL
+    odrv0.config.gpio10_mode = odrive.enums.GPIO_MODE_DIGITAL
+    odrv0.config.gpio11_mode = odrive.enums.GPIO_MODE_DIGITAL
     
     # Configure GPIO for hall sensors of motor1
-    odrv0.config.gpio3_mode = 0 # GPIO_MODE_DIGITAL
-    odrv0.config.gpio4_mode = 0 # GPIO_MODE_DIGITAL
-    odrv0.config.gpio5_mode = 0 # GPIO_MODE_DIGITAL
+    odrv0.config.gpio3_mode = odrive.enums.GPIO_MODE_DIGITAL
+    odrv0.config.gpio4_mode = odrive.enums.GPIO_MODE_DIGITAL
+    odrv0.config.gpio5_mode = odrive.enums.GPIO_MODE_DIGITAL
 
     configure_motor(ax)
     configure_encoder(ax, ignore_hall_error)
@@ -239,7 +244,7 @@ def main():
     try:
         odrv0.save_configuration()
     except:
-        print("Save and reboot...")
+        print("Configuration saved. Rebooting...")
     # Re-discover ODrive.
     odrv0 = odrive.find_any()
     axes = [odrv0.axis0, odrv0.axis1]
@@ -271,7 +276,7 @@ def main():
     try:
         odrv0.save_configuration()
     except:
-        print("Save and reboot...")
+        print("Configuration saved. Rebooting...")
     # Re-discover ODrive.
     odrv0 = odrive.find_any()
     system_error = odrv0.error
