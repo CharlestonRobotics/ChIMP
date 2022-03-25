@@ -18,8 +18,10 @@ constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned long kSerialBaudratePc = 115200;
 constexpr unsigned long kSerialBaudrateOdrive = 115200;
-constexpr int kMotorDir0 = 1;
-constexpr int kMotorDir1 = -1;
+constexpr int kMotorDir0 = 1; // Can only be 1 or -1.
+constexpr int kMotorDir1 = -1; // Can only be 1 or -1.
+constexpr int kSteeringPolarity = 1; // Can only be 1 or -1.
+constexpr int kThrottlePolarity = 1; // Can only be 1 or -1.
 
 // RC settings.
 constexpr int kPwmCenterValue = 1500;
@@ -92,9 +94,11 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), EngagePwmCallbackWrapper, CHANGE);
 
   // Check paramters for validity.
-  bool parametsr_valid = (kMotorDir0 == 1 || kMotorDir0 == -1) &&
-                         (kMotorDir1 == 1 || kMotorDir1 == -1);
-  if (!parametsr_valid) {
+  bool parametrs_valid = ((abs(kMotorDir0) == 1) &&
+                         (abs(kMotorDir1) == 1) &&
+                         (abs(kSteeringPolarity) == 1) &&
+                         (abs(kThrottlePolarity) == 1));
+  if (!parametrs_valid) {
     Serial.println("Invalid parameters found. Halting for safety.");
     while (true);
   }
@@ -147,8 +151,8 @@ void MotionController() {
   float pitch_rate = imu_enabled * gyro_rates.x();
   float yaw_rate = imu_enabled * gyro_rates.z();
 
-  int throttle = rc_enabled * (throttle_pwm - kPwmCenterValue);
-  int steering = rc_enabled * (steering_pwm - kPwmCenterValue);
+  int throttle = kThrottlePolarity * rc_enabled * (throttle_pwm - kPwmCenterValue);
+  int steering = kSteeringPolarity * rc_enabled * (steering_pwm - kPwmCenterValue);
 
   // Update the tilt safety flag based on the latest IMU reading.
   if (abs(euler_angles.z()) > kTiltDisengageThresholdDegrees) {

@@ -3,16 +3,19 @@ ChIMP is not hugely complex, but complex enough that it makes sense to test thin
 ***For all these tests, make sure the robot is secured in place and the wheels are free to turn!***
 
 # Testing ODrive and motors
-Once the ODrive is connected to the motors and Hall sensors, it's a good idea to test that it can make the motors spin. *If you have already fully built your ChIMP, make sure the Arduino is powerd off for this test.*
+Once the ODrive is connected to the motors and Hall sensors, it's a good idea to test that it can make the motors spin.
+*If you have already fully built your ChIMP, make sure the Arduino is powerd off for this test.*
 
 Here are the steps:
 
-* Follow the steps in the [tools/readme](https://github.com/CharlestonRobotics/ChIMP/blob/master/tools) to configure the ODrive. You should see the motors sping during calibration. If that's the case, go to the next step. If not, you are in for some troubleshooting. 
+* Follow the steps in the [tools/readme](https://github.com/CharlestonRobotics/ChIMP/blob/master/tools) to configure the ODrive.
+You should see the motors sping during calibration. If that's the case, go to the next step. If not, you are in for some troubleshooting.
+*If you see the script terminating with encoder errors, you can run the Hall test.*
 * With the ODrive powered and connected to your computer via USB, launch the [odrivetool](https://docs.odriverobotics.com/v/latest/getting-started.html#start-odrivetool).
 * Enable motor 0 (in ODrive speak, axis0): 
 
 ``odrv0.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL``
-* Send a few current commands to your motor. Start small (e.g. 500mA) and see at which current iTht starts spinning:
+* Send a few current commands to your motor. Start small (e.g. 500mA) and see at which current it starts spinning:
 
 ``odrv0.axis0.controller.input_torque = 0.5``
 * Disable motor 0: 
@@ -21,22 +24,26 @@ Here are the steps:
 * Do the same for motor 1 (aka axis1).
 
 Both motors should behave roughly the same for the same amount of current. 
-*If you see the script terminating with encoder errors, you can run the Hall test.*
 
 # Testing the Hall encoders without the ODrive
+*If you were able to spin the motors with the ODrive there is no need to rund this test.*
+
+
 For this test, wire the Hall sensors directly to the Arduino. The red wire goes to 5V and the black to GND.
 The other three wires (signals A, B and Z) will be connected to the Ardunino pins A0, A1 and A2 - the order does not matter.
 
 * Connect the Arduino to your computer and load the [hall_test.ino sketch](https://github.com/CharlestonRobotics/ChIMP/blob/master/tests/hall_test/hall_test.ino).
 * Open the serial terminal. You will see 5 collumns of numbers:
 The first three numbers make up the current hall sensor state. 
-The fourth number is the counter of valid state transitions. On a healthy motor, this should increase by exactly 90 per rotation (note that it increases independent of the direction the wheel turns).
+The fourth number is the counter of valid state transitions. On a healthy motor, this should increase by exactly 90 per rotation
+(note that it increases independent of the direction the wheel turns).
 The fifth number is the counter of invalid or 'illegal' state transitions. This should always be 0. 
 * If the fifth number ever goes beyond 0, something is wrong with the Hall encoders and the ODrive won't be able to calibrate properly.
-* You can reset the counters by typing ```r``` in the serial terminal and hitting ENTER. 
+A possible fix is the increase the capacity of the Hall filter capacitors from 22nF to 47nF.
+* You can reset the counters by typing ```r``` in the serial terminal and hitting ENTER.
 
 # Testing Arduino, ODrive and motors
-Hopefully the previous test went well. If so, let's put the Arduino in the loop!
+If the ODrive setup and test went well it's tiime to put the Arduino in the loop!
 
 * Connect the Arduino to the ODrive via their serial interface (Serial2 on the Arduino, UART_A on the ODrive).
 * Load the [ChIMP/tests/motor_test/motor_test.ino](https://github.com/CharlestonRobotics/ChIMP/tree/master/tests/motor_test) file to your Arduino and open the Arduino serial terminal (@115200bps)
@@ -47,13 +54,13 @@ Hopefully the previous test went well. If so, let's put the Arduino in the loop!
 * Stop the motor with either of the stop commands (freewheel or disable)
 * Try the other motor, and try both at the same time
 
-You should see the same behaviour as in the previous test.
+You should see the same behaviour as in the previous test whereyou commanded current through the ODrive tool.
 
 # Integration tests
-With your chimp fully built up, powered, secured and it's wheels to turn, it's time for some integration testing!
+With your ChIMP fully built, powered, secured in place and its wheels free to turn, it's time for some integration testing!
 
 For these tests, load the [ChIMP.ino](https://github.com/CharlestonRobotics/ChIMP) sketch to your Arduino. 
-Before each test, power off the robot and power it on, so that you start from a repeatable 'clean' state.
+Before each test, power off the robot and power it on again, so that you start from a repeatable 'clean' state.
 After each test, power down the robot by disconnecting the battery.
 
 ## RC test
@@ -61,25 +68,31 @@ After each test, power down the robot by disconnecting the battery.
 * Type h and hit ENTER in the serial console to show all available commands.
 * Disable the motion controller
 * Enable periodic PWM printouts. You should see three collumns of numbers being printed in the console.
-* Move the sticks of your RC transmitter. You should see the three numbers change their values accordingly. 
+* Move the sticks of your RC transmitter. You should see the three numbers change their values accordingly.
 They represent the three signals’ pulse widths in microseconds and should be centered roughly around 1500, ranging from 1000 to 2000.
 
 ## IMU test
 * TODO(LuSeKa)
-
-## RC control test
-* With the respective command, disable the IMU.
-* Using the enable input on your transmitter, enable the robot. *The wheels will likely start spinning at this point.*
-* Now you should be able to control the wheels wih the sticks on your transmitter. 
-* Whe throttle is applied the wheels should turn in the same direction, and steering should make them turn in opposite directions.
-* TODO(LuSeKa): What to do if the wheels spin the wrong way?
 
 ## IMU motor control test
 * With the respective command, disable RC control.
 * Using the enable input on your transmitter, enable the robot. *The wheels will likely start spinning at this point.*
 * If you tilt the robot, the wheels should react by spinning faster or slower.
 * The wheels should spin such that they would make the robot drive in the direction it is leaning towards.
-* TODO(LuSeKa): What to do if the wheels spin the wrong way?
+* If one or both wheels spin in the wrong direction in response to the IMU, you can chang their direction individually
+with the value of the kMotorDir0 and kMotorDir1 parameters in the Arduino Sketch. Change the value accordingly,
+load the sketch on your Arduino and run this test again to verify that the motors behave correctly now. Repeat this step if neccessary.
+
+## RC control test
+* With the respective command, disable the IMU.
+* Using the enable input on your transmitter, enable the robot. *The wheels will likely start spinning at this point.*
+* Now you should be able to control the wheels wih the sticks on your transmitter.
+* When throttle is applied the wheels should turn in the same direction. They should be turning in the opposite direction of the applied throttle:
+For forward throttle, the wheels should turn backwards and vice versa. If that is not the case, change the value of the kThrottlePolarity parameter in the sketch
+(or invert the signal if your tranmsitter makes that easy).
+* The wheels should turn in opposite directions when you appy steering input. If you steer right, the left wheel should forward and the right wheel should turn backwards.
+If that is not the case, change the value of the kSteeringPolarity parameter in the sketch
+(or invert the signal if your tranmsitter makes that easy).
 
 If all these test pass, your ChIMP might be ready to roll!
 
