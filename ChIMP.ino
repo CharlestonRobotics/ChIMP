@@ -24,14 +24,15 @@ constexpr int kSteeringPolarity = 1; // Can only be 1 or -1.
 constexpr int kThrottlePolarity = 1; // Can only be 1 or -1.
 
 // RC settings.
-constexpr int kPwmCenterValue = 1500;
-constexpr int kEngageThresholdPwm = 1500;
+constexpr int kSteeringPwmOffset = 1500;
+constexpr int kThrottlePwmOffset = 1350;
+constexpr int kEngageThresholdPwm = 1600;
 
 // Controller settings.
 float kpBalance = 0.55;
 float kdBalance = -0.045;
-float kpDrive = 0.011;
-float kpSteer = 0.01;
+float kpThrottle = 0.011;
+float kpSteer = 0.006;
 float kdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
@@ -151,8 +152,8 @@ void MotionController() {
   float pitch_rate = imu_enabled * gyro_rates.x();
   float yaw_rate = imu_enabled * gyro_rates.z();
 
-  int throttle = kThrottlePolarity * rc_enabled * (throttle_pwm - kPwmCenterValue);
-  int steering = kSteeringPolarity * rc_enabled * (steering_pwm - kPwmCenterValue);
+  int throttle = kThrottlePolarity * rc_enabled * (throttle_pwm - kThrottlePwmOffset);
+  int steering = kSteeringPolarity * rc_enabled * (steering_pwm - kSteeringPwmOffset);
 
   // Update the tilt safety flag based on the latest IMU reading.
   if (abs(euler_angles.z()) > kTiltDisengageThresholdDegrees) {
@@ -166,11 +167,11 @@ void MotionController() {
   float balance_controller = pitch * kpBalance + pitch_rate * kdBalance;
 
   // Planar motion controllers.
-  float position_controller = kpDrive * throttle;
+  float throttle_controller = kpThrottle * throttle;
   float steering_controller = kpSteer * steering + yaw_rate * kdSteer;
 
-  float current_command_right = (balance_controller - position_controller - steering_controller);
-  float current_command_left = (balance_controller - position_controller + steering_controller);
+  float current_command_right = (balance_controller - throttle_controller - steering_controller);
+  float current_command_left = (balance_controller - throttle_controller + steering_controller);
 
   current_command_right = constrain(current_command_right, -1 * kMaxAbsCurrent, kMaxAbsCurrent);
   current_command_left = constrain(current_command_left, -1 * kMaxAbsCurrent, kMaxAbsCurrent);
@@ -230,7 +231,7 @@ void PrintParameter(String name, float value) {
 void PrintControllerParameters(float foo, float bar) {
   PrintParameter("kpBalance", kpBalance);
   PrintParameter("kdBalance", kdBalance);
-  PrintParameter("kpDrive", kpDrive);
+  PrintParameter("kpThrottle", kpThrottle);
   PrintParameter("kpSteer", kpSteer);
   PrintParameter("kdSteer", kdSteer);
 }
