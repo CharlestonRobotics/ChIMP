@@ -4,6 +4,7 @@
 
 #include <Wire.h>
 #include <Metro.h>
+#include <Servo.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
@@ -13,9 +14,14 @@
 namespace {
 // Hardware settings.
 constexpr unsigned short kLedPin = 13;
-constexpr unsigned short kThrottlePwmInputPin = 3;
+constexpr unsigned short kNeckServoPin = 4;
+
 constexpr unsigned short kSteeringPwmInputPin = 2;
+constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kEngagePwmInputPin = 18;
+constexpr unsigned short kNeckTiltPwmInputPin = 19;
+// Now we are out of interrupts. Neck yaw will be controlled by the RC signal directly.
+
 constexpr unsigned long kSerialBaudratePc = 115200;
 constexpr unsigned long kSerialBaudrateOdrive = 115200;
 constexpr int kMotorDir0 = 1; // Can only be 1 or -1.
@@ -27,6 +33,7 @@ constexpr int kThrottlePolarity = 1; // Can only be 1 or -1.
 constexpr int kSteeringPwmOffset = 1500;
 constexpr int kThrottlePwmOffset = 1350;
 constexpr int kEngageThresholdPwm = 1600;
+constexpr int kNeckTiltPwmOffset = 1500;
 
 // Controller settings.
 float kpBalance = 0.55;
@@ -37,6 +44,8 @@ float kdSteer = 0.01;
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
 constexpr float kMaxAbsCurrent = 10.0;
+constexpr float kNeckTiltRcGain = -0.5;
+constexpr float kNeckTiltImuGain = -2.0;
 
 // Task scheduling settings.
 constexpr unsigned int kBlinkIntervalMs = 200;
@@ -53,9 +62,11 @@ int engage_signal_persistence = 0;
 unsigned long last_throttle_pwm_rise_time = 0;
 unsigned long last_steering_pwm_rise_time = 0;
 unsigned long last_engage_pwm_rise_time = 0;
+unsigned long last_neck_tilt_pwm_rise_time = 0;
 int throttle_pwm = 0;
 int steering_pwm = 0;
 int engage_pwm = 0;
+int neck_tilt_pwm = 0;
 
 // Interactive flags
 bool imu_enabled = true;
@@ -65,6 +76,7 @@ bool motion_controller_enabled = true;
 
 Adafruit_BNO055 bno = Adafruit_BNO055();
 ODriveArduino odrive(Serial2);
+Servo neck_tilt_servo;
 
 // Instantiate Metros for task scheduling.
 Metro led_metro = Metro(kBlinkIntervalMs);
@@ -93,16 +105,19 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(kSteeringPwmInputPin), SteeringPwmCallbackWrapper, CHANGE);
   attachInterrupt(digitalPinToInterrupt(kThrottlePwmInputPin), ThrottlePwmCallbackWrapper, CHANGE);
   attachInterrupt(digitalPinToInterrupt(kEngagePwmInputPin), EngagePwmCallbackWrapper, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kNeckTiltPwmInputPin), NeckTiltPwmCallbackWrapper, CHANGE);
 
   // Check paramters for validity.
   bool parametrs_valid = ((abs(kMotorDir0) == 1) &&
-                         (abs(kMotorDir1) == 1) &&
-                         (abs(kSteeringPolarity) == 1) &&
-                         (abs(kThrottlePolarity) == 1));
+                          (abs(kMotorDir1) == 1) &&
+                          (abs(kSteeringPolarity) == 1) &&
+                          (abs(kThrottlePolarity) == 1));
   if (!parametrs_valid) {
     Serial.println("Invalid parameters found. Halting for safety.");
     while (true);
   }
+  neck_tilt_servo.attach(kNeckServoPin);
+
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
   cmd.add_command('r', &PrintControllerParameters, 0, "Print all controller parameters.");
@@ -148,6 +163,7 @@ void MotionController() {
   imu::Vector<3> euler_angles = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   imu::Vector<3> gyro_rates = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 
+  /* Motor controller */
   float pitch = imu_enabled * euler_angles.z();
   float pitch_rate = imu_enabled * gyro_rates.x();
   float yaw_rate = imu_enabled * gyro_rates.z();
@@ -178,6 +194,16 @@ void MotionController() {
 
   odrive.SetCurrent(0, kMotorDir0 * current_command_right);
   odrive.SetCurrent(1, kMotorDir1 * current_command_left);
+
+  /* Neck controller */
+  int neck_tilt_output_us = kNeckTiltPwmOffset + kNeckTiltRcGain * (neck_tilt_pwm - kNeckTiltPwmOffset) + kNeckTiltImuGain * EulerToMicroseconds(pitch);
+  neck_tilt_output_us = constrain(neck_tilt_output_us, 1300, 1700);
+  neck_tilt_servo.writeMicroseconds(neck_tilt_output_us);
+}
+
+int EulerToMicroseconds(float euler) {
+  constexpr float kMicroSecondsPerHalfRotation = 1000.0;
+  return int((euler / 180.0) * kMicroSecondsPerHalfRotation);
 }
 
 // Engage or disengage motors.
@@ -222,6 +248,10 @@ void EngagePwmCallbackWrapper() {
   PwmInterruptCallback(last_engage_pwm_rise_time, engage_pwm, kEngagePwmInputPin);
 }
 
+void NeckTiltPwmCallbackWrapper() {
+  PwmInterruptCallback(last_neck_tilt_pwm_rise_time, neck_tilt_pwm, kNeckTiltPwmInputPin);
+}
+
 void PrintParameter(String name, float value) {
   Serial.print(name);
   Serial.print(":\t");
@@ -241,7 +271,9 @@ void PrintRcSignals() {
   Serial.print('\t');
   Serial.print(steering_pwm);
   Serial.print('\t');
-  Serial.println(engage_pwm);
+  Serial.print(engage_pwm);
+  Serial.print('\t');
+  Serial.println(neck_tilt_pwm);
 }
 
 void SetKpBalance(float value, float foo) {
