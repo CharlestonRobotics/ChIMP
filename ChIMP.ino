@@ -30,17 +30,17 @@ constexpr int kSteeringPolarity = 1; // Can only be 1 or -1.
 constexpr int kThrottlePolarity = 1; // Can only be 1 or -1.
 
 // RC settings.
-constexpr int kSteeringPwmOffset = 1500;
-constexpr int kThrottlePwmOffset = 1350;
+constexpr int kSteeringPwmOffset = 1500; // Change this if your robot turns in place without steering input.
+constexpr int kThrottlePwmOffset = 1350; // Change this if your robot (always) drifts forward or backward without throttle input.
 constexpr int kEngageThresholdPwm = 1600;
 constexpr int kNeckTiltPwmOffset = 1500;
 
 // Controller settings.
-float kpBalance = 0.55;
-float kdBalance = -0.045;
-float kpThrottle = 0.011;
-float kpSteer = 0.006;
-float kdSteer = 0.01;
+float kpBalance = 0.55; // Refer to the /tests/readme for tuning.
+float kdBalance = -0.045; // Refer to the /tests/readme for tuning.
+float kpThrottle = 0.011; // Change this to control how sensitive your robot reacts to throttle input (higher value means more sensitive).
+float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
+float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
 constexpr float kMaxAbsCurrent = 10.0;
