@@ -1,6 +1,6 @@
 // Arduino sketch for a radio controlled twho-wheeled self balancing robot
 // using a BNO055 IMU module and an ODrive motor controller. Tested on
-// Arduino Mega 2560.
+// Arduino Mega 2560 with ODrive 3.6.
 
 #include <Wire.h>
 #include <Metro.h>
@@ -14,7 +14,8 @@
 namespace {
 // Hardware settings.
 constexpr unsigned short kLedPin = 13;
-constexpr unsigned short kNeckServoPin = 4;
+constexpr unsigned short kNeckTiltServoPin = 4;
+constexpr unsigned short kNeckPanServoPin = 4;
 
 constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kThrottlePwmInputPin = 3;
@@ -34,6 +35,7 @@ constexpr int kSteeringPwmOffset = 1500; // Change this if your robot turns in p
 constexpr int kThrottlePwmOffset = 1350; // Change this if your robot (always) drifts forward or backward without throttle input.
 constexpr int kEngageThresholdPwm = 1600;
 constexpr int kNeckTiltPwmOffset = 1500;
+constexpr int kNeckPanPwmOffset = 1500;
 
 // Controller settings.
 float kpBalance = 0.55; // Refer to the /tests/readme for tuning.
@@ -41,11 +43,11 @@ float kdBalance = -0.045; // Refer to the /tests/readme for tuning.
 float kpThrottle = 0.011; // Change this to control how sensitive your robot reacts to throttle input (higher value means more sensitive).
 float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
 float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
-constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
-constexpr int kEngageSignalPersistenceThreshold = 2;
-constexpr float kMaxAbsCurrent = 10.0;
+constexpr uint8_t kTiltDisengageThresholdDegrees = 40; // Tilt angle (in degrees) at which the motors will automatically disable.
+constexpr float kMaxAbsCurrent = 10.0; // Maximum current (absolute) that the Arduino can command to the ODrive.
 constexpr float kNeckTiltRcGain = -0.5;
 constexpr float kNeckTiltImuGain = -2.0;
+constexpr float kNeckPanRcGain = 1.0;
 
 // Task scheduling settings.
 constexpr unsigned int kBlinkIntervalMs = 200;
@@ -77,6 +79,7 @@ bool motion_controller_enabled = true;
 Adafruit_BNO055 bno = Adafruit_BNO055();
 ODriveArduino odrive(Serial2);
 Servo neck_tilt_servo;
+Servo neck_pan_servo;
 
 // Instantiate Metros for task scheduling.
 Metro led_metro = Metro(kBlinkIntervalMs);
@@ -116,7 +119,8 @@ void setup() {
     Serial.println("Invalid parameters found. Halting for safety.");
     while (true);
   }
-  neck_tilt_servo.attach(kNeckServoPin);
+  neck_tilt_servo.attach(kNeckTiltServoPin);
+  neck_pan_servo.attach(kNeckPanServoPin);
 
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
@@ -146,7 +150,7 @@ void loop() {
     else {
       -- engage_signal_persistence;
     }
-    engage_signal_persistence = constrain (engage_signal_persistence, -1 * kEngageSignalPersistenceThreshold, kEngageSignalPersistenceThreshold);
+    engage_signal_persistence = constrain (engage_signal_persistence, -2, 2);
     bool engage = engage_signal_persistence > 0 ? true : false;
     bool request_motor_activation = engage && !tilt_limit_exceeded;
     EngageMotors(request_motor_activation);
@@ -199,6 +203,9 @@ void MotionController() {
   int neck_tilt_output_us = kNeckTiltPwmOffset + kNeckTiltRcGain * (neck_tilt_pwm - kNeckTiltPwmOffset) + kNeckTiltImuGain * EulerToMicroseconds(pitch);
   neck_tilt_output_us = constrain(neck_tilt_output_us, 1300, 1700);
   neck_tilt_servo.writeMicroseconds(neck_tilt_output_us);
+
+  int neck_pan_output_us = kNeckPanRcGain * (steering_pwm - kNeckPanPwmOffset);
+  neck_pan_servo.writeMicroseconds(neck_pan_output_us);
 }
 
 int EulerToMicroseconds(float euler) {
@@ -225,7 +232,7 @@ void EngageMotors(bool request_motors_active) {
   }
 }
 
-// Generic interrupt callbback function for RC PWM decoding. Measures the high pulse duration in microseconds.
+// Generic interrupt callback function for RC PWM decoding. Measures the high pulse duration in microseconds.
 void PwmInterruptCallback(unsigned long &last_rise_time, int &pwm_us, int pwm_input_pin) {
   if (digitalRead(pwm_input_pin)) { // Signal went HIGH.
     last_rise_time = micros();
