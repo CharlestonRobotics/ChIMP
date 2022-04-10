@@ -19,7 +19,7 @@ def configure_motor(ax):
 
 
 def configure_encoder(ax, ignore_illegal_hall_state):
-    ax.encoder.config.mode = 1 # ENCODER_MODE_HALL
+    ax.encoder.config.mode = odrive.enums.ENCODER_MODE_HALL
     ax.encoder.config.cpr = 90
     ax.encoder.config.calib_scan_distance = 150
     ax.encoder.config.bandwidth = 250
@@ -32,7 +32,7 @@ def configure_controllers(ax):
     ax.controller.config.vel_gain = 0.02 * torque_constant_estimate * ax.encoder.config.cpr
     ax.controller.config.vel_integrator_gain = 0.1 * torque_constant_estimate * ax.encoder.config.cpr
     ax.controller.config.vel_limit = 10
-    ax.controller.config.control_mode = 1 # CONTROL_MODE_TORQUE_CONTROL
+    ax.controller.config.control_mode = odrive.enums.CONTROL_MODE_TORQUE_CONTROL
     # Since we operate in current control mode we want to ignore overspeed errors.
     ax.controller.config.enable_torque_mode_vel_limit = False
     # Push the spinout threshholds out to avoid false positive spinout detections.

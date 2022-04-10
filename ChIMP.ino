@@ -10,6 +10,7 @@
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
 #include <Command_processor.h>
+#include <HallEncoder.h>
 
 namespace {
 // Hardware settings.
@@ -84,6 +85,7 @@ Metro controller_metro = Metro(kControllerIntervalMs);
 Metro activation_metro = Metro(kActivationIntervalMs);
 Metro print_metro = Metro(kPrintIntervalMs);
 Command_processor cmd;
+HallEncoder hall = HallEncoder(1,2,3);
 }
 
 void setup() {
@@ -326,45 +328,4 @@ void EnableRcPrint(float foo, float bar) {
     Serial.println("Enabling PWM printout.");
     rc_print_enabled = true;
   }
-}
-
-/*  Hall sensor based velocity estimation.
- *  Query the hall sensors and determine if the wheel has
- *   not turned
- *   turned forwards
- *   turned backwards
- *  If there was a change, save the time of the last change and compute the rate of change
- *  since the previous change.
- */
-
-typedef struct HallEncoder {
-  uint8_t pin_A;
-  uint8_t pin_B;
-  uint8_t pin_Z;
-  uint8_t last_state;
-  unsigned long last_change_time_us;
-  float velocity_cps;
-  uint8_t calibration;
-} HallEncoder;
-
-uint8_t GetHallState(struct HallEncoder* hall) {
-  uint8_t a = digitalRead(hall->pin_A);
-  uint8_t b = digitalRead(hall->pin_B);
-  uint8_t z = digitalRead(hall->pin_Z);
-  // a, b and z are the three least significant bits of the result.
-  return a << 2 | b << 1 | z;
-}
-
-void UpdateHallEncoder(struct HallEncoder* hall) {
-  unsigned long now = micros();
-  uint8_t state = GetHallState(hall); // Fingers crossed that the state does not change while we sample it.
-  if (state != hall->last_state) {
-    int state_change = GetHallChange(state, hall->last_state); // -1 or 1
-    hall->velocity_cps = (float)state_change / (float)(micros() - hall->last_change_time_us);
-    hall->last_change_time_us = now;
-  }
-}
-
-int GetHallChange(uint8_t state, uint8_t prev_state) {
-  return 0;
 }
