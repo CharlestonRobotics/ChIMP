@@ -22,6 +22,15 @@ constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned short kNeckTiltPwmInputPin = 19;
 // Now we are out of interrupts. Neck yaw will be controlled by the RC signal directly.
+uint8_t right_hall_calibration[6] = {0,0,0,0,0,0};
+uint8_t left_hall_calibration[6] = {0,0,0,0,0,0};
+constexpr unsigned short kRightHallPinA = 0;
+constexpr unsigned short kRightHallPinB = 0;
+constexpr unsigned short kRightHallPinZ = 0;
+
+constexpr unsigned short kLeftHallPinA = 0;
+constexpr unsigned short kLeftHallPinB = 0;
+constexpr unsigned short kLeftHallPinZ = 0;
 
 constexpr unsigned long kSerialBaudratePc = 115200;
 constexpr unsigned long kSerialBaudrateOdrive = 115200;
@@ -40,6 +49,7 @@ constexpr int kNeckTiltPwmOffset = 1500;
 float kpBalance = 0.55; // Refer to the /tests/readme for tuning.
 float kdBalance = -0.045; // Refer to the /tests/readme for tuning.
 float kpThrottle = 0.011; // Change this to control how sensitive your robot reacts to throttle input (higher value means more sensitive).
+float kdThrottle = 0.0; // This parameter helps the robot to stand in place and never go too fast - like driving through honey.
 float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
 float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
@@ -85,7 +95,8 @@ Metro controller_metro = Metro(kControllerIntervalMs);
 Metro activation_metro = Metro(kActivationIntervalMs);
 Metro print_metro = Metro(kPrintIntervalMs);
 Command_processor cmd;
-HallEncoder hall = HallEncoder(1,2,3);
+HallEncoder left_hall = HallEncoder(kLeftHallPinA, kLeftHallPinB, kLeftHallPinZ);
+HallEncoder right_hall = HallEncoder(kRightHallPinA, kRightHallPinB, kRightHallPinZ);
 }
 
 void setup() {
@@ -99,6 +110,8 @@ void setup() {
     while (true);
   }
   delay(1000);
+  left_hall.CopyCalibration(left_hall_calibration);
+  right_hall.CopyCalibration(right_hall_calibration);
 
   // PWM decoder interrupt handling.
   last_throttle_pwm_rise_time = micros();
@@ -127,6 +140,7 @@ void setup() {
   cmd.add_command('t', &EnableRcPrint, 0, "Enable/disable periodic PWM printout.");
   cmd.add_command('u', &EnableRcControl, 0, "Enable/disable RC control.");
   cmd.add_command('k', &EnableMotionController, 0, "Enable/disable motion controller.");
+  cmd.add_command('c', &RunHallCalibration, 1, "Run Hall encoder calibration left (0) or right (1).");
 }
 
 void loop() {
@@ -156,7 +170,10 @@ void loop() {
   if (led_metro.check()) {
     digitalWrite(kLedPin, !digitalRead(kLedPin));
   }
+  // Things that should just run as often as possible.
   cmd.parse_command();
+  left_hall.Update();
+  right_hall.Update();
 }
 
 // Sample the IMU, compute current commands and send to the ODrive.
@@ -170,6 +187,7 @@ void MotionController() {
   float pitch_rate = imu_enabled * gyro_rates.x();
   float yaw_rate = imu_enabled * gyro_rates.z();
 
+  float linear_velocity = (left_hall.GetVelocity() + right_hall.GetVelocity())/2.0;
   int throttle = kThrottlePolarity * rc_enabled * (throttle_pwm - kThrottlePwmOffset);
   int steering = kSteeringPolarity * rc_enabled * (steering_pwm - kSteeringPwmOffset);
 
@@ -185,7 +203,7 @@ void MotionController() {
   float balance_controller = pitch * kpBalance + pitch_rate * kdBalance;
 
   // Planar motion controllers.
-  float throttle_controller = kpThrottle * throttle;
+  float throttle_controller = kpThrottle * throttle - kdThrottle * linear_velocity;
   float steering_controller = kpSteer * steering + yaw_rate * kdSteer;
 
   float current_command_right = (balance_controller - throttle_controller - steering_controller);
@@ -264,6 +282,7 @@ void PrintControllerParameters(float foo, float bar) {
   PrintParameter("kpBalance", kpBalance);
   PrintParameter("kdBalance", kdBalance);
   PrintParameter("kpThrottle", kpThrottle);
+  PrintParameter("kdThrottle", kdThrottle);
   PrintParameter("kpSteer", kpSteer);
   PrintParameter("kdSteer", kdSteer);
 }
@@ -328,4 +347,16 @@ void EnableRcPrint(float foo, float bar) {
     Serial.println("Enabling PWM printout.");
     rc_print_enabled = true;
   }
+}
+
+void RunHallCalibration(float hall_num, float foo) {
+    if (hall_num == 0) {
+        left_hall.Calibrate();
+    }
+    else if (hall_num == 1) {
+        right_hall.Calibrate();
+    }
+    else {
+        Serial.println("Invalid Hall encoder selection (must be 0 or 1).");
+    }
 }
