@@ -94,7 +94,18 @@ For forward throttle, the wheels should turn backwards and vice versa. If that i
 If that is not the case, change the value of the kSteeringPolarity parameter in the sketch
 (or invert the signal if your tranmsitter makes that easy).
 
-If all these test pass, your ChIMP might be ready to roll!
+## Hall sensor calibration (for Arduino)
+Each wheel has a set of three Hall sensors that are used by the ODrive to control the motor.
+They are also used by the Arduino to keep track of the wheel position (odometry) and the robot's velocity.
+Since the wires can be connected to the Arduino in any order, they need to be calibrated.
+The calibration result (a sequence of six numbers) encodes all that the Arduino needs to know to make sense of the Hall sensor signals.
+* With the robot propped up (wheels not touching anything) and the motors disabled, enter the command 'c 0' to begin Hall calibration for the left wheel.
+* Manually turn the left wheel (slowly) forward until the serial console anonunces a successful calibration (only a few degrees are needed).
+* Manually type the result (six numbers) into the curly braces of the left_hall_calibration parameter, separated by commas (replacing the six zeros).
+* Do the same for the right wheel (use command 'c 1').
+* To apply the calibration, upload the ChIMP.ino sketch again.
+
+If all these test pass and steps succeed, your ChIMP might be ready to roll!
 
 # First time rolling
 ***THESE STEPS REQUIRE CAUTION! DO THIS IN A SPACIOUS AREA, WITH NOTHING FRAGILE ANYWHERE NEAR (INCLUDING PETS AND KIDS!). ALL KINDS OF THINGS COULD GO WRONG.***
