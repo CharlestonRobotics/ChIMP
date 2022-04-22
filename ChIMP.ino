@@ -203,8 +203,16 @@ void MotionController() {
   float balance_controller = pitch * kpBalance + pitch_rate * kdBalance;
 
   // Planar motion controllers.
+  // Throttle and steering are computed differentiy depending on the mode of operation.
+
+  // Direct control mode
   float throttle_controller = kpThrottle * throttle - kdThrottle * linear_velocity;
   float steering_controller = kpSteer * steering + yaw_rate * kdSteer;
+
+  // ToDo: Position hold mode.
+  // set_position
+  // actual_position
+  // throttle_controller = kpPosition * (set_position - actual_position) - kdPosition * linear_velocity;
 
   float current_command_right = (balance_controller - throttle_controller - steering_controller);
   float current_command_left = (balance_controller - throttle_controller + steering_controller);
