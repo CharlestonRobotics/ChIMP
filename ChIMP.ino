@@ -91,9 +91,16 @@ Command_processor cmd;
 }
 
 void setup() {
-  pinMode(kLedPin, OUTPUT);
+  // Enable Serial interfaces.
   Serial.begin(kSerialBaudratePc); // Serial connection to PC.
   Serial2.begin(kSerialBaudrateOdrive); // Serial connection to ODrive.
+
+  pinMode(kLedPin, OUTPUT);
+
+  // Enable the IMU
+  pinMode(KBnoResetArdPin, OUTPUT);
+  digitalWrite(KBnoResetArdPin, HIGH); // Must be driven HIGH to enable the IMU.
+  delay(500); // Give the IMU a little time to boot.
   bno.setExtCrystalUse(true);
   if (!bno.begin()) {
     // BNO initialization failed. Possible reasons are 1) bad wiring or 2) incorrect I2C address.
@@ -122,9 +129,6 @@ void setup() {
   }
   neck_tilt_servo.attach(kNeckTiltServoPin);
   neck_pan_servo.attach(kNeckPanServoPin);
-
-  pinMode(KBnoResetArdPin, OUTPUT);
-  digitalWrite(KBnoResetArdPin, HIGH); // Must be driven HIGH to enable the IMU.
 
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
