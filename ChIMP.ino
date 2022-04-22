@@ -15,7 +15,7 @@ namespace {
 // Hardware settings.
 constexpr unsigned short kLedPin = 13;
 constexpr unsigned short kNeckTiltServoPin = 4;
-constexpr unsigned short kNeckPanServoPin = 4;
+constexpr unsigned short kNeckPanServoPin = 5;
 
 constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kThrottlePwmInputPin = 3;
