@@ -16,6 +16,7 @@ namespace {
 constexpr unsigned short kLedPin = 13;
 constexpr unsigned short kNeckTiltServoPin = 4;
 constexpr unsigned short kNeckPanServoPin = 5;
+constexpr unsigned short KBnoResetArdPin = 7; // 9 axis motion shield default BNO reset pin.
 
 constexpr unsigned short kSteeringPwmInputPin = 2;
 constexpr unsigned short kThrottlePwmInputPin = 3;
@@ -121,6 +122,9 @@ void setup() {
   }
   neck_tilt_servo.attach(kNeckTiltServoPin);
   neck_pan_servo.attach(kNeckPanServoPin);
+
+  pinMode(KBnoResetArdPin, OUTPUT);
+  digitalWrite(KBnoResetArdPin, HIGH); // Must be driven HIGH to enable the IMU.
 
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
