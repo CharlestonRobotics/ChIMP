@@ -10,7 +10,7 @@
 #include <utility/imumaths.h>
 #include <ODriveArduino.h>
 #include <Command_processor.h>
-#include <HallEncoder.h>
+#include <HallEncoder.h> // https://github.com/LuSeKa/HallEncoder
 
 namespace {
 // Hardware settings.
