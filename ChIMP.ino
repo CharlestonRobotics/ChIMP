@@ -22,15 +22,15 @@ constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned short kNeckTiltPwmInputPin = 19;
 // Now we are out of interrupts. Neck yaw will be controlled by the RC signal directly.
-uint8_t right_hall_calibration[6] = {0,0,0,0,0,0};
-uint8_t left_hall_calibration[6] = {0,0,0,0,0,0};
-constexpr unsigned short kRightHallPinA = 0;
-constexpr unsigned short kRightHallPinB = 0;
-constexpr unsigned short kRightHallPinZ = 0;
+int right_hall_calibration[6] = {5,1,0,3,4,2};
+int left_hall_calibration[6] = {5,1,0,3,4,2};
+constexpr unsigned short kRightHallPinA = 48;
+constexpr unsigned short kRightHallPinB = 50;
+constexpr unsigned short kRightHallPinZ = 52;
 
-constexpr unsigned short kLeftHallPinA = 0;
-constexpr unsigned short kLeftHallPinB = 0;
-constexpr unsigned short kLeftHallPinZ = 0;
+constexpr unsigned short kLeftHallPinA = 49;
+constexpr unsigned short kLeftHallPinB = 51;
+constexpr unsigned short kLeftHallPinZ = 53;
 
 constexpr unsigned long kSerialBaudratePc = 115200;
 constexpr unsigned long kSerialBaudrateOdrive = 115200;
@@ -49,7 +49,7 @@ constexpr int kNeckTiltPwmOffset = 1500;
 float kpBalance = 0.55; // Refer to the /tests/readme for tuning.
 float kdBalance = -0.045; // Refer to the /tests/readme for tuning.
 float kpThrottle = 0.011; // Change this to control how sensitive your robot reacts to throttle input (higher value means more sensitive).
-float kdThrottle = 0.0; // This parameter helps the robot to stand in place and never go too fast - like driving through honey.
+float kdThrottle = 0.02; // This parameter helps the robot to stand in place and never go too fast - like driving through honey.
 float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
 float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
@@ -135,12 +135,14 @@ void setup() {
 
   cmd.add_command('p', &SetKpBalance, 1, "Set balance kp gain.");
   cmd.add_command('d', &SetKdBalance, 1, "Set balance kd gain.");
+  cmd.add_command('D', &SetKdThrottle, 1, "Set position kd gain.");
   cmd.add_command('r', &PrintControllerParameters, 0, "Print all controller parameters.");
   cmd.add_command('w', &EnableImu, 0, "Enable/disable IMU.");
   cmd.add_command('t', &EnableRcPrint, 0, "Enable/disable periodic PWM printout.");
   cmd.add_command('u', &EnableRcControl, 0, "Enable/disable RC control.");
   cmd.add_command('k', &EnableMotionController, 0, "Enable/disable motion controller.");
   cmd.add_command('c', &RunHallCalibration, 1, "Run Hall encoder calibration left (0) or right (1).");
+  cmd.add_command('g', &PrintWheelPositions, 0, "Print both wheel positions reported by the Hall encoders.");
 }
 
 void loop() {
@@ -315,6 +317,11 @@ void SetKdBalance(float value, float foo) {
   kdBalance = value;
 }
 
+void SetKdThrottle(float value, float foo) {
+  Serial.println("Setting kdThrottle to " + String(value));
+  kdThrottle = value;
+}
+
 void EnableImu(float foo, float bar) {
   if (imu_enabled) {
     Serial.println("Disabling IMU.");
@@ -367,4 +374,10 @@ void RunHallCalibration(float hall_num, float foo) {
     else {
         Serial.println("Invalid Hall encoder selection (must be 0 or 1).");
     }
+}
+
+void PrintWheelPositions(float value, float foo) {
+  Serial.print(left_hall.GetPosition());
+  Serial.print('\t');
+  Serial.println(right_hall.GetPosition());
 }
