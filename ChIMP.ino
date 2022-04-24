@@ -12,6 +12,12 @@
 #include <Command_processor.h>
 #include <HallEncoder.h> // https://github.com/LuSeKa/HallEncoder
 
+enum ChimpControlMode {
+  kDirectControl,
+  kPositionHold,
+  kNumControlModes
+};
+
 namespace {
 // Hardware settings.
 constexpr unsigned short kLedPin = 13;
@@ -22,8 +28,8 @@ constexpr unsigned short kThrottlePwmInputPin = 3;
 constexpr unsigned short kEngagePwmInputPin = 18;
 constexpr unsigned short kNeckTiltPwmInputPin = 19;
 // Now we are out of interrupts. Neck yaw will be controlled by the RC signal directly.
-int right_hall_calibration[6] = {5,1,0,3,4,2};
-int left_hall_calibration[6] = {5,1,0,3,4,2};
+int right_hall_calibration[6] = {5, 1, 0, 3, 4, 2};
+int left_hall_calibration[6] = {5, 1, 0, 3, 4, 2};
 constexpr unsigned short kRightHallPinA = 48;
 constexpr unsigned short kRightHallPinB = 50;
 constexpr unsigned short kRightHallPinZ = 52;
@@ -48,10 +54,15 @@ constexpr int kNeckTiltPwmOffset = 1500;
 // Controller settings.
 float kpBalance = 0.55; // Refer to the /tests/readme for tuning.
 float kdBalance = -0.045; // Refer to the /tests/readme for tuning.
+
 float kpThrottle = 0.011; // Change this to control how sensitive your robot reacts to throttle input (higher value means more sensitive).
 float kdThrottle = 0.02; // This parameter helps the robot to stand in place and never go too fast - like driving through honey.
+
 float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
 float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
+
+float kpPosition = 0.01;
+
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
 constexpr float kMaxAbsCurrent = 10.0;
@@ -68,6 +79,7 @@ constexpr unsigned int kPrintIntervalMs = 50;
 bool motors_active = false; // motor state
 bool tilt_limit_exceeded = false;
 int engage_signal_persistence = 0;
+ChimpControlMode control_mode = kDirectControl;
 
 // PWM decoder variables.
 unsigned long last_throttle_pwm_rise_time = 0;
@@ -123,11 +135,11 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(kNeckTiltPwmInputPin), NeckTiltPwmCallbackWrapper, CHANGE);
 
   // Check paramters for validity.
-  bool parametrs_valid = ((abs(kMotorDir0) == 1) &&
-                          (abs(kMotorDir1) == 1) &&
-                          (abs(kSteeringPolarity) == 1) &&
-                          (abs(kThrottlePolarity) == 1));
-  if (!parametrs_valid) {
+  bool parameters_valid = ((abs(kMotorDir0) == 1) &&
+                           (abs(kMotorDir1) == 1) &&
+                           (abs(kSteeringPolarity) == 1) &&
+                           (abs(kThrottlePolarity) == 1));
+  if (!parameters_valid) {
     Serial.println("Invalid parameters found. Halting for safety.");
     while (true);
   }
@@ -168,11 +180,20 @@ void loop() {
     bool engage = engage_signal_persistence > 0 ? true : false;
     bool request_motor_activation = engage && !tilt_limit_exceeded;
     EngageMotors(request_motor_activation);
+
+    if ((neck_tilt_pwm < 1500) && (control_mode != kDirectControl)) {
+      Serial.println("Switching to direct control mode.");
+      control_mode = kDirectControl;
+    }
+    else if ((neck_tilt_pwm >= 1500) && (control_mode != kPositionHold)) {
+      Serial.println("Switching to position hold control mode.");
+      control_mode = kPositionHold;
+    }
   }
   if (led_metro.check()) {
     digitalWrite(kLedPin, !digitalRead(kLedPin));
   }
-  // Things that should just run as often as possible.
+  // Things that should run as frequently as possible.
   cmd.parse_command();
   left_hall.Update();
   right_hall.Update();
@@ -189,7 +210,8 @@ void MotionController() {
   float pitch_rate = imu_enabled * gyro_rates.x();
   float yaw_rate = imu_enabled * gyro_rates.z();
 
-  float linear_velocity = (left_hall.GetVelocity() + right_hall.GetVelocity())/2.0;
+  float linear_velocity = (left_hall.GetVelocity() + right_hall.GetVelocity()) / 2.0;
+  long linear_position = left_hall.GetPosition() + right_hall.GetPosition();
   int throttle = kThrottlePolarity * rc_enabled * (throttle_pwm - kThrottlePwmOffset);
   int steering = kSteeringPolarity * rc_enabled * (steering_pwm - kSteeringPwmOffset);
 
@@ -205,16 +227,27 @@ void MotionController() {
   float balance_controller = pitch * kpBalance + pitch_rate * kdBalance;
 
   // Planar motion controllers.
-  // Throttle and steering are computed differentiy depending on the mode of operation.
+  //   * Throttle and steering are computed differentiy depending on the mode of operation.
+  float steering_controller = 0;
+  float throttle_controller = 0;
+  long reference_position = 0;
 
-  // Direct control mode
-  float throttle_controller = kpThrottle * throttle - kdThrottle * linear_velocity;
-  float steering_controller = kpSteer * steering + yaw_rate * kdSteer;
+  switch (control_mode) {
+    case kDirectControl:
+      throttle_controller = kpThrottle * throttle - kdThrottle * linear_velocity;
+      steering_controller = kpSteer * steering + yaw_rate * kdSteer;
+      break;
 
-  // ToDo: Position hold mode.
-  // set_position
-  // actual_position
-  // throttle_controller = kpPosition * (set_position - actual_position) - kdPosition * linear_velocity;
+    case kPositionHold:
+      throttle_controller = kpPosition * (reference_position - linear_position) - kdThrottle * linear_velocity;
+      steering_controller = kpSteer * steering + yaw_rate * kdSteer;
+      break;
+
+    default:
+      // Invalid control mode.
+      throttle_controller = 0;
+      steering_controller = 0;
+  }
 
   float current_command_right = (balance_controller - throttle_controller - steering_controller);
   float current_command_left = (balance_controller - throttle_controller + steering_controller);
@@ -365,15 +398,15 @@ void EnableRcPrint(float foo, float bar) {
 }
 
 void RunHallCalibration(float hall_num, float foo) {
-    if (hall_num == 0) {
-        left_hall.Calibrate();
-    }
-    else if (hall_num == 1) {
-        right_hall.Calibrate();
-    }
-    else {
-        Serial.println("Invalid Hall encoder selection (must be 0 or 1).");
-    }
+  if (hall_num == 0) {
+    left_hall.Calibrate();
+  }
+  else if (hall_num == 1) {
+    right_hall.Calibrate();
+  }
+  else {
+    Serial.println("Invalid Hall encoder selection (must be 0 or 1).");
+  }
 }
 
 void PrintWheelPositions(float value, float foo) {
