@@ -61,7 +61,8 @@ float kdThrottle = 0.02; // This parameter helps the robot to stand in place and
 float kpSteer = 0.006; // Change this to control how sensitive your robot reacts to steering input (higher value means more sensitive).
 float kdSteer = 0.01; // Change this to control how well your robot tracks a straight line (higher value means it will track better, but react less to steering input).
 
-float kpPosition = 0.01;
+float kpPosition = 0.045;
+float kdPosition = 0.035;
 
 constexpr uint8_t kTiltDisengageThresholdDegrees = 40;
 constexpr int kEngageSignalPersistenceThreshold = 2;
@@ -181,13 +182,15 @@ void loop() {
     bool request_motor_activation = engage && !tilt_limit_exceeded;
     EngageMotors(request_motor_activation);
 
-    if ((neck_tilt_pwm < 1500) && (control_mode != kDirectControl)) {
+    if ((neck_tilt_pwm < 1250) && (control_mode != kDirectControl)) {
       Serial.println("Switching to direct control mode.");
       control_mode = kDirectControl;
     }
-    else if ((neck_tilt_pwm >= 1500) && (control_mode != kPositionHold)) {
+    else if ((neck_tilt_pwm >= 1750) && (control_mode != kPositionHold)) {
       Serial.println("Switching to position hold control mode.");
       control_mode = kPositionHold;
+      right_hall.Reset();
+      left_hall.Reset();
     }
   }
   if (led_metro.check()) {
@@ -239,7 +242,7 @@ void MotionController() {
       break;
 
     case kPositionHold:
-      throttle_controller = kpPosition * (reference_position - linear_position) - kdThrottle * linear_velocity;
+      throttle_controller = kpPosition * (reference_position - linear_position) - kdPosition * linear_velocity;
       steering_controller = kpSteer * steering + yaw_rate * kdSteer;
       break;
 
@@ -275,6 +278,8 @@ void EngageMotors(bool request_motors_active) {
     switch (request_motors_active) {
       case true:
         Serial.println("Engaging motors.");
+        right_hall.Reset();
+        left_hall.Reset();
         odrive.run_state(0, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
         odrive.run_state(1, AXIS_STATE_CLOSED_LOOP_CONTROL, false);
         break;
