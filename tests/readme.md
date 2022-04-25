@@ -101,7 +101,7 @@ Since the wires can be connected to the Arduino in any order, they need to be ca
 The calibration result (a sequence of six numbers) encodes all that the Arduino needs to know to make sense of the Hall sensor signals.
 * With the robot propped up (wheels not touching anything) and the motors disabled, enter the command 'c 0' to begin Hall calibration for the left wheel.
 * Manually turn the left wheel (slowly) forward until the serial console anonunces a successful calibration (only a few degrees are needed).
-* Manually type the result (six numbers) into the curly braces of the left_hall_calibration parameter, separated by commas (replacing the six zeros).
+* Manually type the result (six numbers) into the curly braces of the left_hall_calibration parameter, separated by commas (replacing the numbers that are in there).
 * Do the same for the right wheel (use command 'c 1').
 * To apply the calibration, upload the ChIMP.ino sketch again.
 
